@@ -24,11 +24,24 @@ class heap_domaint : public domaint
 
   heap_domaint(unsigned int _domain_number, replace_mapt &_renaming_map,
                const var_specst &var_specs,
-               const namespacet &ns_)
-      : domaint(_domain_number, _renaming_map), ns(ns_)
+               const local_SSAt &SSA_)
+      : domaint(_domain_number, _renaming_map), ns(SSA_.ns), SSA(SSA_)
   {
     make_template(var_specs, ns);
   }
+
+  struct template_rowt
+  {
+    vart expr;
+    guardt pre_guard;
+    guardt post_guard;
+    exprt aux_expr;
+    kindt kind;
+    mem_kindt mem_kind;
+    exprt dyn_obj;
+    irep_idt member;
+  };
+  typedef std::vector<template_rowt> templatet;
 
   /**
    * Value of a row is set of paths in the heap leading from row variable
@@ -37,7 +50,9 @@ class heap_domaint : public domaint
   {
     bool nondet = false;            /**< Row is nondeterministic - expression is TRUE */
 
-    virtual exprt get_row_expr(const vart &templ_expr) const = 0;
+    virtual exprt get_row_expr(const templatet &templ,
+                               const rowt &row,
+                               bool rename_templ_expr) const = 0;
 
     virtual bool empty() const = 0;
 
@@ -48,7 +63,9 @@ class heap_domaint : public domaint
   {
     std::set<exprt> points_to;   /**< Set of objects (or NULL) the row variable can point to */
 
-    virtual exprt get_row_expr(const vart &templ_expr) const override;
+    virtual exprt get_row_expr(const templatet &templ,
+                               const rowt &row,
+                               bool rename_templ_expr) const override;
 
     virtual bool add_points_to(const exprt &expr) override;
 
@@ -92,18 +109,21 @@ class heap_domaint : public domaint
 
     std::list<pathsett> paths;
     std::set<rowt> pointed_by;      /**< Set of rows whose variables point to this row */
+    std::set<exprt> access_by;
     dyn_objt dyn_obj;
     bool self_linkage = false;
 
     heap_row_valuet(const dyn_objt &dyn_obj_) : dyn_obj(dyn_obj_) {}
 
-    virtual exprt get_row_expr(const vart &templ_expr) const override;
+    virtual exprt get_row_expr(const templatet &templ,
+                               const rowt &row,
+                               bool rename_templ_expr) const override;
 
     virtual bool add_points_to(const exprt &dest) override;
 
     virtual bool empty() const override
     {
-      return paths.empty();
+      return paths.empty() && !self_linkage;
     }
 
     bool add_path(const exprt &dest, const dyn_objt &dyn_obj);
@@ -116,9 +136,18 @@ class heap_domaint : public domaint
 
     bool add_all_paths(const heap_row_valuet &other_val, const dyn_objt &dyn_obj);
 
+    bool remove_all_paths(const heap_row_valuet &other_val);
+
+    void remove_null_paths();
+
     bool add_pointed_by(const rowt &row);
 
+    bool add_access_by(const exprt &expr);
+
     bool add_self_linkage();
+
+   protected:
+    static exprt rename_outheap(const symbol_exprt &expr);
   };
 
   class heap_valuet : public valuet, public std::vector<std::unique_ptr<row_valuet>>
@@ -129,19 +158,6 @@ class heap_domaint : public domaint
       return *(this->at(row).get());
     }
   };
-
-  struct template_rowt
-  {
-    vart expr;
-    guardt pre_guard;
-    guardt post_guard;
-    exprt aux_expr;
-    kindt kind;
-    mem_kindt mem_kind;
-    exprt dyn_obj;
-    irep_idt member;
-  };
-  typedef std::vector<template_rowt> templatet;
 
   // Initialize value
   virtual void initialize(valuet &value) override;
@@ -160,9 +176,13 @@ class heap_domaint : public domaint
 
   exprt get_row_post_constraint(const rowt &row, const row_valuet &row_value);
 
+  // Row modifications
   bool add_transitivity(const rowt &from, const rowt &to, heap_valuet &value);
 
   bool add_points_to(const rowt &row, heap_valuet &value, const exprt &dest);
+
+  bool add_access_by(const std::vector<heap_domaint::rowt> &dests,
+                       const heap_domaint::rowt &src, heap_domaint::heap_valuet &value);
 
   bool set_nondet(const rowt &row, heap_valuet &value);
 
@@ -181,7 +201,8 @@ class heap_domaint : public domaint
   // Join of values
   virtual void join(valuet &value1, const valuet &value2) override;
 
-  const std::list<symbol_exprt> &get_new_heap_vars() const;
+  // Getters for protected fields
+  const std::list<symbol_exprt> get_new_heap_vars();
 
   const exprt get_advancer_bindings() const;
   const exprt get_aux_bindings() const;
@@ -190,28 +211,66 @@ class heap_domaint : public domaint
  protected:
   templatet templ;
   namespacet ns;
+  const local_SSAt &SSA;
 
-  exprt::operandst advancer_bindings;
+  exprt::operandst iterator_bindings;
   exprt::operandst aux_bindings;
-  std::list<symbol_exprt> new_heap_row_vars;
 
+  class heap_row_spect
+  {
+   public:
+    symbol_exprt expr;
+    unsigned location_number;
+
+    mutable exprt post_guard;
+
+    heap_row_spect(const symbol_exprt &expr, unsigned int location_number, const exprt &post_guard)
+        : expr(expr), location_number(location_number), post_guard(post_guard) {}
+
+    bool operator<(const heap_row_spect &rhs) const
+    {
+      return std::tie(expr, location_number) < std::tie(rhs.expr, rhs.location_number);
+    }
+
+    bool operator==(const heap_row_spect &rhs) const
+    {
+      return std::tie(expr, location_number) == std::tie(rhs.expr, rhs.location_number);
+    }
+  };
+
+  std::set<heap_row_spect> new_heap_row_specs;
+
+  // Template construction
   void make_template(const var_specst &var_specs, const namespacet &ns);
 
   void add_template_row(const var_spect &var_spec, const typet &pointed_type);
 
   // Initializing functions
-  void bind_advancers(const local_SSAt &SSA, const exprt &precondition,
+  void bind_iterators(const local_SSAt &SSA, const exprt &precondition,
                       template_generator_baset &template_generator);
 
   void create_precondition(const symbol_exprt &var, const exprt &precondition);
 
-  void new_output_template_row(const local_SSAt &SSA, const symbol_exprt &var,
-                               template_generator_baset &template_generator);
+  const exprt iterator_access_bindings(const symbol_exprt &src, const exprt &init_pointer,
+                                       const symbol_exprt &iterator_sym,
+                                       const std::vector<irep_idt> &fields,
+                                       const list_iteratort::accesst &access, const unsigned level,
+                                       exprt::operandst guards, const exprt &precondition,
+                                       const local_SSAt &SSA);
 
-  static std::set<symbol_exprt> reachable_objects(const advancert &advancer,
-                                                  const exprt &precondition);
+  const std::set<symbol_exprt> reachable_objects(const exprt &src,
+                                                 const std::vector<irep_idt> &fields,
+                                                 const exprt &precondition) const;
 
-  static std::set<exprt> collect_preconditions_rec(const exprt &expr, const exprt &precondition);
+  static const std::set<exprt> collect_preconditions_rec(const exprt &expr,
+                                                         const exprt &precondition);
+
+  void add_new_heap_row_spec(const symbol_exprt &expr, const unsigned location_number,
+                               const exprt &post_guard);
+
+  void new_output_template_row(const symbol_exprt &var, const unsigned location_number,
+                                 const exprt &post_guard, const local_SSAt &SSA,
+                                 template_generator_baset &template_generator);
 
   // Utility functions
   static int get_symbol_loc(const exprt &expr);

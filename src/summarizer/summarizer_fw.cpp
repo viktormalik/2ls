@@ -139,6 +139,7 @@ void summarizer_fwt::do_summary(const function_namet &function_name,
   conds.push_back(cond);
   conds.push_back(summary.fw_precondition);
   conds.push_back(ssa_inliner.get_summaries(SSA));
+  debug() << "Callee summaries: " << from_expr(SSA.ns, "", ssa_inliner.get_summaries(SSA)) << eom;
 
 #ifdef REUSE_INVARIANTS
   if(summary_db.exists(function_name)) //reuse existing invariants

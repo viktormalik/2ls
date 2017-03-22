@@ -10,6 +10,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #define CPROVER_SSA_OBJECTS_H
 
 #include <goto-programs/goto_functions.h>
+#include "ssa_pointed_objects.h"
+#include "ssa_heap_domain.h"
 
 class ssa_objectt
 {
@@ -95,6 +97,19 @@ public:
     expr.set(flag, value);
   }
 
+  inline void set_iterator(const irep_idt &pointer_id, const std::vector<irep_idt> &fields)
+  {
+    assert(expr.id() == ID_symbol && expr.get_bool(ID_pointed));
+    expr.set(ID_iterator, true);
+    expr.set(ID_it_pointer, pointer_id);
+    set_iterator_fields(expr, fields);
+    expr.set(ID_it_init_value, to_symbol_expr(expr).get_identifier());
+    expr.set(ID_it_init_value_level, expr.get(ID_pointed_level));
+    const irep_idt new_id = id2string(pointer_id) + id2string("'it");
+    to_symbol_expr(expr).set_identifier(new_id);
+    identifier = identifiert(new_id);
+  }
+
 protected:
   exprt expr;
   identifiert identifier;
@@ -114,26 +129,23 @@ public:
   typedef std::set<exprt> literalst;
   literalst literals;
 
-  ssa_objectst(
-    const goto_functionst::goto_functiont &goto_function,
-    const namespacet &ns)
+  const ssa_heap_analysist &heap_analysis;
+
+  ssa_objectst(const goto_functionst::goto_functiont &goto_function,
+               const namespacet &ns,
+               const ssa_heap_analysist &_heap_analysis)
+      : heap_analysis(_heap_analysis)
   {
     collect_objects(goto_function, ns);
     categorize_objects(goto_function, ns);
   }
   
 protected:
-  void collect_objects(
-    const goto_functionst::goto_functiont &,
-    const namespacet &);
+  void collect_objects(const goto_functionst::goto_functiont &, const namespacet &);
 
   void categorize_objects(
     const goto_functionst::goto_functiont &,
     const namespacet &);
-    
-  void add_ptr_objects(
-      const goto_functionst::goto_functiont &,
-      const namespacet &);
 };
 
 bool is_ptr_object(const exprt &);

@@ -7,9 +7,11 @@ Author: Daniel Kroening, kroening@kroening.com
 \*******************************************************************/
 
 #include <util/byte_operators.h>
+#include <util/find_symbols.h>
 
 #include "assignments.h"
 #include "ssa_dereference.h"
+#include "local_ssa.h"
 
 /*******************************************************************\
 
@@ -52,63 +54,101 @@ void assignmentst::build_assignment_map(
       // * any global-scoped variables
       // * any dirty locals
       
-      for(objectst::const_iterator
-          o_it=ssa_objects.dirty_locals.begin();
-          o_it!=ssa_objects.dirty_locals.end(); o_it++)
+//      for(objectst::const_iterator
+//          o_it=ssa_objects.dirty_locals.begin();
+//          o_it!=ssa_objects.dirty_locals.end(); o_it++)
+//      {
+//        bool declared = false;
+//        forall_goto_program_instructions(other_it, goto_program)
+//        {
+//          if (it == other_it) break;
+//          if (assigns(other_it, *o_it)) declared = true;
+//        }
+//        if (declared)
+//          assign(*o_it, it, ns);
+//      }
+
+      auto n_it = it; ++n_it;
+      const irep_idt fname = to_symbol_expr(code_function_call.function()).get_identifier();
+      std::list<symbol_exprt> new_objects;
+      std::set<exprt> modified_objects;
+      if (ssa_heap_analysis.has_location(n_it))
       {
-        bool declared = false;
-        forall_goto_program_instructions(other_it, goto_program)
-        {
-          if (it == other_it) break;
-          if (assigns(other_it, *o_it)) declared = true;
-        }
-        if (declared)
-          assign(*o_it, it, ns);
+        new_objects = ssa_heap_analysis[n_it].new_caller_objects(fname, it);
+        modified_objects = ssa_heap_analysis[n_it].modified_objects(fname);
+      }
+
+      for (auto &o : new_objects)
+      {
+        assign(o, it, ns);
       }
 
       for(objectst::const_iterator
           o_it=ssa_objects.globals.begin();
           o_it!=ssa_objects.globals.end(); o_it++)
       {
-        bool assigned = false;
-        const exprt &root_obj = o_it->get_root_object();
-        if (is_ptr_object(root_obj))
-        { // assign objects pointed by return value of the function
-          const exprt &function = code_function_call.function();
-          if (function.id() == ID_symbol &&
-              id2string(o_it->get_identifier()).find(
-                  id2string(to_symbol_expr(function).get_identifier())) !=
-              std::string::npos)
-            assigned = true;
-        }
-        else
-        { // assign return value of the function
-          if (id2string(o_it->get_identifier()).find("#return_value") == std::string::npos)
-            assigned = true;
-        }
-
-        if (assigned)
+        if (id2string(o_it->get_identifier()) == id2string(fname) + "#return_value" ||
+            id2string(o_it->get_identifier()).find("dynamic_object$") == std::string::npos)
           assign(*o_it, it, ns);
       }
 
-      // assign objects pointed by arguments of the function
-      for (auto &arg : code_function_call.arguments())
+      for (auto &modified : modified_objects)
       {
-        if (arg.type().id() == ID_pointer)
+        const exprt arg = ssa_heap_analysis[n_it].function_map.at(fname).corresponding_expr(
+            modified, code_function_call.arguments(), 0);
+
+        if (arg != modified)
         {
-          exprt arg_ptr = arg;
-          do
+          const exprt arg_deref = dereference(arg, ssa_value_ai[it], "", ns);
+          assign(arg_deref, it, ns);
+
+          std::set<symbol_exprt> symbols;
+          find_symbols(arg_deref, symbols);
+          for (auto &symbol : symbols)
           {
-            // Dereference argument in next location (to include potential new objects after
-            // the function call)
-            auto n_it = it; ++n_it;
-            arg_ptr = dereference(dereference_exprt(arg_ptr, arg_ptr.type().subtype()),
-                                  ssa_value_ai[n_it], "", ns);
-            assign(arg_ptr, it, ns);
+            if (symbol.type() == arg_deref.type())
+            {
+              auto &aliases = ssa_value_ai[n_it](symbol, ns).value_set;
+              for (auto &alias : aliases)
+              {
+                assign(alias.get_expr(), it, ns);
+              }
+            }
           }
-          while (arg_ptr.type().id() == ID_pointer);
         }
       }
+
+//      // assign objects pointed by arguments of the function
+//      for (auto &arg : code_function_call.arguments())
+//      {
+//        if (arg.type().id() == ID_pointer)
+//        {
+//          exprt arg_ptr = arg;
+//          do
+//          {
+//            // Dereference argument in next location (to include potential new objects after
+//            // the function call)
+//            arg_ptr = dereference(dereference_exprt(arg_ptr, arg_ptr.type().subtype()),
+//                                  ssa_value_ai[n_it], "", ns);
+//            assign(arg_ptr, it, ns);
+//
+//            std::set<symbol_exprt> symbols;
+//            find_symbols(arg_ptr, symbols);
+//            for (auto &symbol : symbols)
+//            {
+//              if (symbol.type() == arg_ptr.type())
+//              {
+//                auto &aliases = ssa_value_ai[n_it](symbol, ns).value_set;
+//                for (auto &alias : aliases)
+//                {
+//                  assign(alias.get_expr(), it, ns);
+//                }
+//              }
+//            }
+//          }
+//          while (arg_ptr.type().id() == ID_pointer);
+//        }
+//      }
 
       // the call might come with an assignment
       if(code_function_call.lhs().is_not_nil())
@@ -143,7 +183,7 @@ void assignmentst::assign(
   if(is_symbol_struct_member(lhs, ns))
   {
     const typet &lhs_type=ns.follow(lhs.type());
-    
+
     if(lhs_type.id()==ID_struct)
     {
       // Are we assigning an entire struct?

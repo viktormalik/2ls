@@ -44,6 +44,8 @@ DELTA_OBJ+=\
       ../ssa/ssa_unwinder$(OBJEXT)\
       ../ssa/unwindable_local_ssa$(OBJEXT)\
       ../ssa/ssa_value_set$(OBJEXT) \
+      ../ssa/ssa_pointed_objects$(OBJEXT) \
+      ../ssa/ssa_heap_domain$(OBJEXT) \
       ../functions/summary$(OBJEXT) \
       ../functions/get_function$(OBJEXT) \
       ../functions/path_util$(OBJEXT) \
@@ -51,7 +53,7 @@ DELTA_OBJ+=\
       ../functions/index$(OBJEXT) \
       ../domains/fixed_point$(OBJEXT) \
       ../domains/ssa_fixed_point$(OBJEXT) \
-      ../domains/advancer$(OBJEXT) \
+      ../domains/list_iterator$(OBJEXT) \
       ../domains/tpolyhedra_domain$(OBJEXT) \
       ../domains/predabs_domain$(OBJEXT) \
       ../domains/equality_domain$(OBJEXT) \

@@ -105,6 +105,10 @@ protected:
 		   local_SSAt::nodest::const_iterator n_it,
 		   exprt &init_expr);
 
+	void get_assign_guard(const local_SSAt &SSA, local_SSAt::objectst::const_iterator o_it,
+												local_SSAt::nodest::const_iterator n_it,
+												exprt &assign_guard);
+
   bool replace_post(replace_mapt replace_map, exprt &expr);
   bool build_custom_expr(const local_SSAt &SSA,
 			 local_SSAt::nodest::const_iterator n_it,

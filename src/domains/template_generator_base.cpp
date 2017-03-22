@@ -174,7 +174,16 @@ void template_generator_baset::collect_variables_loop(const local_SSAt &SSA,bool
 	get_pre_var(SSA,o_it,n_it,pre_var);
         exprt init_expr;
 	get_init_expr(SSA,o_it,n_it,init_expr);
-        add_var(pre_var,pre_guard,post_guard,domaint::LOOP,var_specs);
+
+        exprt object_post_guard = post_guard;
+        exprt assign_guard = nil_exprt();
+        get_assign_guard(SSA, o_it, n_it, assign_guard);
+        if (assign_guard.is_not_nil())
+        {
+          object_post_guard = and_exprt(object_post_guard, assign_guard);
+        }
+
+        add_var(pre_var,pre_guard,object_post_guard,domaint::LOOP,var_specs);
 
   #ifdef DEBUG
         std::cout << "Adding " << from_expr(ns, "", in) << " " << 
@@ -633,7 +642,7 @@ void template_generator_baset::instantiate_standard_domains(const local_SSAt &SS
   else if(options.get_bool_option("heap"))
   {
     filter_heap_domain();
-    domain_ptr = new heap_domaint(domain_number, renaming_map, var_specs, SSA.ns);
+    domain_ptr = new heap_domaint(domain_number, renaming_map, var_specs, SSA);
   }
   else if(options.get_bool_option("intervals"))
   {
@@ -674,5 +683,22 @@ void template_generator_baset::instantiate_standard_domains(const local_SSAt &SS
       var_specs, SSA.ns);
     static_cast<tpolyhedra_domaint *>(domain_ptr)->add_quadratic_template(
       var_specs, SSA.ns);
+  }
+}
+
+void template_generator_baset::get_assign_guard(const local_SSAt &SSA,
+                                                local_SSAt::objectst::const_iterator o_it,
+                                                local_SSAt::nodest::const_iterator n_it,
+                                                exprt &assign_guard)
+{
+  auto def_it = SSA.ssa_analysis[n_it->location].def_map.find(o_it->get_identifier());
+  if (def_it != SSA.ssa_analysis[n_it->location].def_map.end())
+  {
+    auto def_loc = def_it->second.def.loc;
+    auto node = SSA.find_node(def_loc);
+    if (node->assign_guards.find(*o_it) != node->assign_guards.end())
+    {
+      assign_guard = node->assign_guards.at(*o_it);
+    }
   }
 }

@@ -35,8 +35,11 @@ class ssa_inlinert : public messaget
   void get_summaries(const local_SSAt &SSA,
 		     bool forward,
 		     exprt::operandst &summaries,
-		     exprt::operandst &bindings);
+		     exprt::operandst &bindings,
+				local_SSAt::locationt loc = local_SSAt::locationt());
   exprt get_summaries(const local_SSAt &SSA);
+
+	exprt get_summaries_to_loc(const local_SSAt &SSA, local_SSAt::locationt loc);
 
   void replace(local_SSAt &SSA,
 	       local_SSAt::nodest::iterator node,
@@ -105,6 +108,8 @@ class ssa_inlinert : public messaget
   local_SSAt::nodet::equalitiest new_equs;
   std::set<local_SSAt::nodet::function_callst::iterator> rm_function_calls;
 
+	std::set<symbol_exprt> covered_cs_heap_out;
+
   void replace_globals_in(const local_SSAt::var_sett &globals_in, 
                           const local_SSAt::var_sett &globals);
   void replace_params(const local_SSAt::var_listt &params,
@@ -115,6 +120,10 @@ class ssa_inlinert : public messaget
 
   exprt get_replace_globals_in(const local_SSAt::var_sett &globals_in, 
                           const local_SSAt::var_sett &globals);
+
+	exprt get_replace_new_objects(const local_SSAt &SSA,
+                                  const function_application_exprt funapp_expr,
+                                  local_SSAt::locationt loc, const summaryt &summary);
 
 	exprt get_replace_params(const local_SSAt::var_listt &params,
                              const function_application_exprt &funapp_expr,
@@ -131,6 +140,8 @@ class ssa_inlinert : public messaget
 
   void rename(exprt &expr);
   void rename(local_SSAt::nodet &node);
+
+  bool cs_heap_covered(const exprt &expr);
 
 	// Transformation functions for lists of input/output arguments/pointers (or their members)
 	// for binding purposes
@@ -164,7 +175,7 @@ class ssa_inlinert : public messaget
 	const exprt new_pointed_arg(const exprt &arg, const typet &pointed_type,
                                 const std::list<exprt> &args_out);
 
-  static bool contains_advancer(const std::list<exprt> &params);
+  static bool contains_iterator(const std::list<exprt> &params);
 };
 
 

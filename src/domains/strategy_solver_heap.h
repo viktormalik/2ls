@@ -36,6 +36,10 @@ class strategy_solver_heapt : public strategy_solver_baset
   int find_member_row(const exprt &obj, const irep_idt &member, int actual_loc,
                       const domaint::kindt &kind);
 
+  std::vector<unsigned> find_object_rows(const exprt &obj,
+                                         int actual_loc,
+                                         const domaint::kindt &kind);
+
   bool update_rows_rec(const heap_domaint::rowt &row, heap_domaint::heap_valuet &value);
 
   void print_solver_expr(const exprt &expr);

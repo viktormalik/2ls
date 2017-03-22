@@ -118,6 +118,17 @@ bool strategy_solver_heapt::iterate(invariantt &_inv)
 
           symbol_exprt obj = to_symbol_expr(to_address_of_expr(ptr_value).object());
 
+          if (obj.type() != templ_row.expr.type() &&
+              ns.follow(templ_row.expr.type().subtype()) != ns.follow(obj.type()))
+          {
+            if (heap_domain.set_nondet(row, inv))
+            {
+              improved = true;
+              debug() << "Set nondet" << eom;
+            }
+            continue;
+          }
+
           // Add equality p == &obj
           if (heap_domain.add_points_to(row, inv, obj))
           {
@@ -127,22 +138,32 @@ bool strategy_solver_heapt::iterate(invariantt &_inv)
                     << from_expr(ns, "", obj) << eom;
           }
 
-          if (templ_row.mem_kind == heap_domaint::HEAP && obj.type().get_bool("#dynamic") &&
+          if (obj.type().get_bool("#dynamic") &&
               id2string(obj.get_identifier()).find("$unknown") == std::string::npos)
           {
-            // Find row with corresponding member field of pointed object (obj.member)
-            int member_val_index;
-            member_val_index = find_member_row(obj, templ_row.member, actual_loc,
-                                               templ_row.kind);
-            assert(member_val_index >= 0);
-
-            // Add all paths from obj.next to p
-            if (heap_domain.add_transitivity(row, (unsigned) member_val_index, inv))
+            std::vector<unsigned> obj_rows = find_object_rows(obj, actual_loc, templ_row.kind);
+            if (heap_domain.add_access_by(obj_rows, row, inv))
             {
               improved = true;
-              debug() << "Add all paths: "
-                      << from_expr(ns, "", heap_domain.templ[member_val_index].expr)
-                      << ", through: " << from_expr(ns, "", obj) << eom;
+            }
+
+            if (templ_row.mem_kind == heap_domaint::HEAP)
+            {
+              // Find row with corresponding member field of pointed object (obj.member)
+              int member_val_index;
+              member_val_index = find_member_row(obj, templ_row.member, actual_loc,
+                                                 templ_row.kind);
+              if (member_val_index >= 0 && !inv[member_val_index].nondet)
+              {
+                // Add all paths from obj.next to p
+                if (heap_domain.add_transitivity(row, (unsigned) member_val_index, inv))
+                {
+                  improved = true;
+                  debug() << "Add all paths: "
+                          << from_expr(ns, "", heap_domain.templ[member_val_index].expr)
+                          << ", through: " << from_expr(ns, "", obj) << eom;
+                }
+              }
             }
           }
         }
@@ -158,7 +179,8 @@ bool strategy_solver_heapt::iterate(invariantt &_inv)
         if (templ_row.mem_kind == heap_domaint::HEAP)
         { // Recursively update all rows that are dependent on this row
           updated_rows.clear();
-          update_rows_rec(row, inv);
+          if (!inv[row].nondet)
+            update_rows_rec(row, inv);
         }
       }
     }
@@ -189,6 +211,8 @@ bool strategy_solver_heapt::iterate(invariantt &_inv)
       exprt post = heap_domain.get_row_post_constraint(i, inv[i]);
       debug() << "post-cond: " << from_expr(ns, "", post) << " "
               << from_expr(ns, "", solver.get(post)) << eom;
+      print_solver_expr(c);
+      print_solver_expr(post);
     }
 #endif
   }
@@ -223,7 +247,8 @@ int strategy_solver_heapt::find_member_row(const exprt &obj, const irep_idt &mem
       if (id.find(obj_id) != std::string::npos)
       {
         int loc = heap_domain.get_symbol_loc(templ_row.expr);
-        if (loc > max_loc && (kind == domaint::OUT || loc <= actual_loc))
+        if (loc > max_loc &&
+            (kind == domaint::OUT || kind == domaint::OUTHEAP || loc <= actual_loc))
         {
           max_loc = loc;
           result = i;
@@ -231,6 +256,28 @@ int strategy_solver_heapt::find_member_row(const exprt &obj, const irep_idt &mem
       }
     }
   }
+  return result;
+}
+
+std::vector<unsigned> strategy_solver_heapt::find_object_rows(const exprt &obj, int actual_loc,
+                                                              const domaint::kindt &kind)
+{
+  assert(obj.id() == ID_symbol);
+
+  std::vector<unsigned> result;
+
+  for (unsigned i = 0; i < heap_domain.templ.size(); ++i)
+  {
+    heap_domaint::template_rowt &templ_row = heap_domain.templ[i];
+    if (templ_row.kind == kind && templ_row.mem_kind == heap_domaint::HEAP &&
+        templ_row.dyn_obj == obj)
+    {
+      int loc = heap_domain.get_symbol_loc(templ_row.expr);
+      if (kind != domaint::LOOP || loc >= actual_loc)
+        result.push_back(i);
+    }
+  }
+
   return result;
 }
 
@@ -251,14 +298,19 @@ bool strategy_solver_heapt::update_rows_rec(const heap_domaint::rowt &row,
   bool result = false;
   for (auto &ptr : row_value.pointed_by)
   {
-    if (heap_domain.add_transitivity(ptr, row, value))
-      result = true;
-    debug() << "recursively updating row: " << ptr << eom;
-    debug() << "add all paths: " << from_expr(ns, "", templ_row.expr) << ", through: "
-            << from_expr(ns, "", templ_row.dyn_obj) << eom;
-    // Recursive update is called for each row only once
-    if (updated_rows.find(ptr) == updated_rows.end())
-      result = update_rows_rec(ptr, value) || result;
+    if (heap_domain.templ[ptr].mem_kind == heap_domaint::HEAP &&
+        heap_domain.templ[ptr].member == templ_row.member)
+    {
+      if (heap_domain.add_transitivity(ptr, row, value))
+        result = true;
+
+      debug() << "recursively updating row: " << ptr << eom;
+      debug() << "add all paths: " << from_expr(ns, "", templ_row.expr) << ", through: "
+              << from_expr(ns, "", templ_row.dyn_obj) << eom;
+      // Recursive update is called for each row only once
+      if (updated_rows.find(ptr) == updated_rows.end())
+        result = update_rows_rec(ptr, value) || result;
+    }
   }
   return result;
 }
@@ -281,5 +333,11 @@ void strategy_solver_heapt::initialize(const local_SSAt &SSA, const exprt &preco
     solver << input_bindings;
     debug() << "Input bindings:" << eom;
     debug() << from_expr(ns, "", input_bindings) << eom;
+  }
+
+  if (!heap_domain.new_heap_row_specs.empty())
+  {
+    debug() << "New template:" << eom;
+    heap_domain.output_domain(debug(), ns);
   }
 }

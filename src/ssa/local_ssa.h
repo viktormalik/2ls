@@ -13,11 +13,12 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <goto-programs/goto_functions.h>
 
-#include "../domains/advancer.h"
+#include "../domains/list_iterator.h"
 #include "../domains/incremental_solver.h"
 #include "ssa_domain.h"
 #include "guard_map.h"
 #include "ssa_object.h"
+#include "ssa_heap_domain.h"
 
 #define TEMPLATE_PREFIX "__CPROVER_template"
 #define TEMPLATE_DECL TEMPLATE_PREFIX
@@ -31,19 +32,21 @@ public:
   typedef goto_programt::const_targett locationt;
 
   inline local_SSAt(
-    const goto_functiont &_goto_function,
-    const namespacet &_ns,
-    const std::string &_suffix=""):
-    ns(_ns), goto_function(_goto_function), 
-    ssa_objects(_goto_function, ns),
-    ssa_value_ai(_goto_function, ns),
-    assignments(_goto_function.body, ns, ssa_objects, ssa_value_ai),
-    guard_map(_goto_function.body),
-    ssa_analysis(assignments),
-    suffix(_suffix) 
+      const goto_functiont &_goto_function,
+      const namespacet &_ns,
+      const ssa_heap_analysist &_heap_analysis,
+      const std::string &_suffix = "") :
+      ns(_ns), goto_function(_goto_function),
+      heap_analysis(_heap_analysis),
+      ssa_objects(_goto_function, ns, _heap_analysis),
+      ssa_value_ai(_goto_function, ns, _heap_analysis),
+      assignments(_goto_function.body, ns, ssa_objects, ssa_value_ai, heap_analysis),
+      guard_map(_goto_function.body),
+      ssa_analysis(assignments),
+      suffix(_suffix)
   {
     //ENHANCE: in future locst will be used (currently in path-symex/locs.h)
-    forall_goto_program_instructions(it,_goto_function.body)
+    forall_goto_program_instructions(it, _goto_function.body)
       location_map[it->location_number] = it;
 
     build_SSA();
@@ -88,7 +91,9 @@ public:
 
     locationt location; //link to goto instruction
     std::list<nodet>::iterator loophead; //link to loop head node
-       // otherwise points to nodes.end() 
+       // otherwise points to nodes.end()
+
+    std::map<ssa_objectt, exprt> assign_guards;
 
     void output(std::ostream &, const namespacet &) const;
 
@@ -127,7 +132,7 @@ public:
   var_listt params;  
   var_sett globals_in, globals_out;
 
-  std::set<advancert> advancers;
+  std::set<list_iteratort> iterators;
 
   // unknown heap objects
   var_sett unknown_objs;
@@ -161,11 +166,11 @@ public:
   exprt read_rhs_rec(const exprt &, locationt loc) const;
   symbol_exprt read_rhs(const ssa_objectt &, locationt loc) const;
   exprt read_node_in(const ssa_objectt &, locationt loc) const;
-  void assign_rec(const exprt &lhs, const exprt &rhs, const exprt &guard, locationt loc);
+  void assign_rec(const exprt &lhs, const exprt &rhs, const exprt guard, locationt loc);
 
-  void collect_advancers_rhs(const exprt &expr, locationt loc);
-  void collect_advancers_lhs(const ssa_objectt &object, locationt loc);
-  void new_advancer_instance(const member_exprt &expr, locationt loc, int inst_loc_number);
+  void collect_iterators_rhs(const exprt &expr, locationt loc);
+  void collect_iterators_lhs(const ssa_objectt &object, locationt loc);
+  void new_iterator_access(const member_exprt &expr, locationt loc, int inst_loc_number);
 
   exprt unknown_obj_eq(const symbol_exprt &obj, const struct_typet::componentt &component) const;
 
@@ -176,6 +181,8 @@ public:
   
   exprt dereference(const exprt &expr, locationt loc) const;
 
+  const ssa_heap_analysist &heap_analysis;
+
   ssa_objectst ssa_objects;
   typedef ssa_objectst::objectst objectst;
   ssa_value_ait ssa_value_ai;
@@ -185,6 +192,7 @@ public:
   guard_mapt guard_map;
 
   ssa_ait ssa_analysis;
+
   std::string suffix; // an extra suffix
 
   void get_globals(locationt loc, std::set<symbol_exprt> &globals, 
