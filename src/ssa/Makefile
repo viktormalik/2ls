@@ -4,7 +4,7 @@ SRC = local_ssa.cpp \
       ssa_value_set.cpp address_canonizer.cpp simplify_ssa.cpp \
       ssa_build_goto_trace.cpp ssa_inliner.cpp ssa_unwinder.cpp \
       unwindable_local_ssa.cpp ssa_db.cpp \
-      ssa_pointed_objects.cpp ssa_heap_domain.cpp
+      ssa_pointed_objects.cpp ssa_heap_domain.cpp may_alias_analysis.cpp
 
 include ../config.inc
 include $(CBMC)/src/config.inc
