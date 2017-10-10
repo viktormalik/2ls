@@ -338,7 +338,8 @@ exprt dereference_rec(
     {
       auto it=values.value_set.begin();
 
-      if(values.null || values.unknown)
+      if(values.null || values.unknown ||
+         (values.value_set.size()>1 && it->type().get_bool("#dynamic")))
       {
         std::string dyn_type_name=pointed_type.id_string();
         if(pointed_type.id()==ID_struct)
@@ -351,7 +352,7 @@ exprt dereference_rec(
       else
       {
         result=ssa_alias_value(src, (it++)->get_expr(), ns);
-        result.set("#heap_access", result.get_bool("#dynamic"));
+        result.set("#heap_access", result.type().get_bool("#dynamic"));
       }
 
       for(; it!=values.value_set.end(); ++it)
