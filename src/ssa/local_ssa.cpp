@@ -2015,7 +2015,7 @@ exprt local_SSAt::concretise_symbolic_deref_rhs(
     const exprt deref_rhs=dereference(rhs, loc);
     const exprt symbolic_deref_rhs=symbolic_dereference(rhs, ns);
     ssa_objectt rhs_object(symbolic_deref_rhs, ns);
-    if(symbolic_deref_rhs.get_bool("#heap_access") && rhs_object)
+    if(deref_rhs.get_bool("#heap_access") && rhs_object)
     {
       const exprt pointer=get_pointer(
           rhs_object.get_root_object(),
@@ -2038,7 +2038,6 @@ exprt local_SSAt::concretise_symbolic_deref_rhs(
       }
     }
 
-    return (all_symbolic_deref_defined(symbolic_deref_rhs, ns, loc) &&
-        !deref_rhs.get_bool("#heap_access"))
+    return (all_symbolic_deref_defined(symbolic_deref_rhs, ns, loc))
            ? symbolic_deref_rhs : deref_rhs;
 }
