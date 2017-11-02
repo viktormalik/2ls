@@ -71,6 +71,11 @@ protected:
   void assign(
     const ssa_objectt &lhs, locationt,
     const namespacet &ns);
+
+  void build_assertion(
+      const exprt &expr,
+      const locationt& loc,
+      const namespacet &ns);
 };
 
 #endif
