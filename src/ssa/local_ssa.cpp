@@ -603,8 +603,12 @@ void local_SSAt::build_cond(locationt loc)
   // anything to be built?
   if(loc->is_goto() || loc->is_assume())
   {
+    const exprt deref_rhs=dereference(loc->guard, loc);
+    collect_iterators_rhs(deref_rhs, loc);
+    const exprt rhs=concretise_symbolic_deref_rhs(loc->guard, ns, loc);
+
     // produce a symbol for the renamed branching condition
-    equal_exprt equality(cond_symbol(loc), read_rhs(loc->guard, loc));
+    equal_exprt equality(cond_symbol(loc), read_rhs(rhs, loc));
     (--nodes.end())->equalities.push_back(equality);
   }
   else if(loc->is_function_call())
