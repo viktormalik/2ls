@@ -49,6 +49,11 @@ void assignmentst::build_assignment_map(
     {
       assign_symbolic_rhs(it->guard, it, ns);
     }
+    else if(it->is_assume() || it->is_goto())
+    {
+      const exprt rhs_symbolic_deref=symbolic_dereference(it->guard, ns);
+      build_assertion(it->guard, it, ns);
+    }
     else if(it->is_decl())
     {
       const code_declt &code_decl=to_code_decl(it->code);
