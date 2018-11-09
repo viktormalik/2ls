@@ -26,6 +26,8 @@ OBJ+= $(CBMC)/src/ansi-c/ansi-c$(LIBEXT) \
       $(CBMC)/src/solvers/solvers$(LIBEXT) \
       $(CBMC)/src/util/util$(LIBEXT) \
       $(CBMC)/src/goto-instrument/unwind$(OBJEXT) \
+      $(CBMC)/src/goto-instrument/k_induction$(OBJEXT) \
+      $(CBMC)/src/goto-instrument/loop_utils$(OBJEXT) \
       ../domains/domains$(LIBEXT) \
       ../ssa/ssa$(LIBEXT) \
       ../solver/solver$(LIBEXT) \

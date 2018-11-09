@@ -22,7 +22,7 @@ Function: summary_checker_bmct::operator()
 \*******************************************************************/
 
 property_checkert::resultt summary_checker_bmct::operator()(
-  const goto_modelt &goto_model)
+  goto_modelt &goto_model)
 {
   const namespacet ns(goto_model.symbol_table);
 

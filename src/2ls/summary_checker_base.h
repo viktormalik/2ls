@@ -50,7 +50,7 @@ public:
   bool show_vcc, simplify, fixed_point;
   irep_idt function_to_check;
 
-  virtual resultt operator()(const goto_modelt &) { assert(false); }
+  virtual resultt operator()(goto_modelt &) { assert(false); }
 
   void instrument_and_output(goto_modelt &goto_model);
 

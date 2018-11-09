@@ -6,6 +6,7 @@ Author: Peter Schrammel
 
 \*******************************************************************/
 
+#include <goto-instrument/k_induction.h>
 #include <domains/heap_tpolyhedra_domain.h>
 #include "summary_checker_kind.h"
 
@@ -22,20 +23,20 @@ Function: summary_checker_kindt::operator()
 \*******************************************************************/
 
 property_checkert::resultt summary_checker_kindt::operator()(
-  const goto_modelt &goto_model)
+  goto_modelt &goto_model)
 {
   const namespacet ns(goto_model.symbol_table);
 
-  SSA_functions(goto_model, ns, heap_analysis);
+  // SSA_functions(goto_model, ns, heap_analysis);
 
-  ssa_unwinder.init(true, false);
+  // ssa_unwinder.init(true, false);
 
   property_checkert::resultt result=property_checkert::UNKNOWN;
   unsigned max_unwind=options.get_unsigned_int_option("unwind");
   unsigned give_up_invariants=
     options.get_unsigned_int_option("give-up-invariants");
   status() << "Max-unwind is " << max_unwind << eom;
-  ssa_unwinder.init_localunwinders();
+  // ssa_unwinder.init_localunwinders();
 
   for(unsigned unwind=0; unwind<=max_unwind; unwind++)
   {
@@ -44,7 +45,17 @@ property_checkert::resultt summary_checker_kindt::operator()(
     // TODO: recompute only functions with loops
     summary_db.mark_recompute_all();
 
-    ssa_unwinder.unwind_all(unwind);
+    // ssa_unwinder.unwind_all(unwind);
+    if (unwind > 0)
+      k_induction(goto_model.goto_functions, false, true, unwind);
+    else
+    {
+      k_induction(goto_model.goto_functions, true, false, unwind);
+    }
+    // Maybe should be here, don't know yet
+    SSA_functions(goto_model, ns, heap_analysis);
+    ssa_unwinder.init(false, false);
+    // ssa_unwinder.init_localunwinders();
 
     result=check_properties();
     bool magic_limit_not_reached=

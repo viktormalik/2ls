@@ -21,7 +21,7 @@ public:
   {
   }
 
-  virtual resultt operator()(const goto_modelt &);
+  virtual resultt operator()(goto_modelt &);
 
   void check_properties(
     const ssa_dbt::functionst::const_iterator f_it);

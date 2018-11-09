@@ -21,7 +21,7 @@ public:
   {
   }
 
-  virtual resultt operator()(const goto_modelt &);
+  virtual resultt operator()(goto_modelt &);
 
 protected:
   void report_preconditions();
