@@ -215,11 +215,11 @@ void summary_checker_baset::check_properties(
   incremental_solvert &solver=ssa_db.get_solver(f_it->first);
   solver.set_message_handler(get_message_handler());
 
+  solver.new_context();
+
   // give SSA to solver
   solver << SSA;
-  SSA.mark_nodes();
-
-  solver.new_context();
+//  SSA.mark_nodes();
 
   exprt enabling_expr=SSA.get_enabling_exprs();
   solver << enabling_expr;
@@ -453,14 +453,14 @@ exprt::operandst summary_checker_baset::get_loophead_selects(
       continue;
     symbol_exprt lsguard=
       SSA.name(SSA.guard_symbol(), local_SSAt::LOOP_SELECT, n_it->location);
-    ssa_unwinder.get(function_name).unwinder_rename(lsguard, *n_it, true);
+//    ssa_unwinder.get(function_name).unwinder_rename(lsguard, *n_it, true);
     loophead_selects.push_back(not_exprt(lsguard));
-    solver.set_frozen(solver.convert(lsguard));
+//    solver.set_frozen(solver.convert(lsguard));
   }
-  literalt loophead_selects_literal=
-    solver.convert(conjunction(loophead_selects));
-  if(!loophead_selects_literal.is_constant())
-    solver.set_frozen(loophead_selects_literal);
+//  literalt loophead_selects_literal=
+//    solver.convert(conjunction(loophead_selects));
+//  if(!loophead_selects_literal.is_constant())
+//    solver.set_frozen(loophead_selects_literal);
 
 #if 0
   std::cout << "loophead_selects: "
@@ -491,7 +491,7 @@ exprt::operandst summary_checker_baset::get_loop_continues(
   // TODO: this should be provided by unwindable_local_SSA
   exprt::operandst loop_continues;
 
-  ssa_unwinder.get(function_name).loop_continuation_conditions(loop_continues);
+//  ssa_unwinder.get(function_name).loop_continuation_conditions(loop_continues);
   if(loop_continues.size()==0)
   {
     // TODO: this should actually be done transparently by the unwinder

@@ -68,10 +68,12 @@ void ssa_analyzert::operator()(
   if(SSA.goto_function.body.instructions.empty())
     return;
 
-  solver << SSA;
-  SSA.mark_nodes();
+//  SSA.mark_nodes();
 
   solver.new_context();
+
+  solver << SSA;
+
   solver << SSA.get_enabling_exprs();
 
   // add precondition (or conjunction of asssertion in backward analysis)

@@ -8,6 +8,7 @@ Author: Peter Schrammel
 
 #include <goto-instrument/k_induction.h>
 #include <domains/heap_tpolyhedra_domain.h>
+#include <goto-instrument/unwind.h>
 #include "summary_checker_kind.h"
 
 /*******************************************************************\
@@ -38,6 +39,8 @@ property_checkert::resultt summary_checker_kindt::operator()(
   status() << "Max-unwind is " << max_unwind << eom;
   // ssa_unwinder.init_localunwinders();
 
+  goto_unwindt goto_unwind;
+
   for(unsigned unwind=0; unwind<=max_unwind; unwind++)
   {
     status() << "Unwinding (k=" << unwind << ")" << eom;
@@ -45,15 +48,21 @@ property_checkert::resultt summary_checker_kindt::operator()(
     // TODO: recompute only functions with loops
     summary_db.mark_recompute_all();
 
+    goto_unwind(goto_model.goto_functions, unwind, goto_unwindt::CONTINUE);
+    goto_model.goto_functions.compute_location_numbers();
+    goto_model.goto_functions.compute_loop_numbers();
+    goto_model.goto_functions.compute_target_numbers();
+    goto_model.goto_functions.compute_incoming_edges();
     // ssa_unwinder.unwind_all(unwind);
-    if (unwind > 0)
-      k_induction(goto_model.goto_functions, false, true, unwind);
-    else
-    {
-      k_induction(goto_model.goto_functions, true, false, unwind);
-    }
+//    if (unwind > 0)
+//      k_induction(goto_model.goto_functions, false, true, unwind);
+//    else
+//    {
+//      k_induction(goto_model.goto_functions, true, false, unwind);
+//    }
     // Maybe should be here, don't know yet
     SSA_functions(goto_model, ns, heap_analysis);
+    ssa_db.get("_start").output(std::cout);
     ssa_unwinder.init(false, false);
     // ssa_unwinder.init_localunwinders();
 
