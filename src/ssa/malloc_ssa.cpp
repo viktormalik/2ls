@@ -17,6 +17,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <ansi-c/c_types.h>
 #include <analyses/constant_propagator.h>
 
+#include <ssa/dynamic_object.h>
+
 #include <functional>
 
 #include "malloc_ssa.h"
@@ -52,56 +54,6 @@ inline static typet c_sizeof_type_rec(const exprt &expr)
   }
 
   return nil_typet();
-}
-
-/*******************************************************************\
-
-Function: create_dynamic_object
-
-  Inputs:
-
- Outputs:
-
- Purpose: Create new dynamic object, insert it into the symbol table
-          and return its address.
-
-\*******************************************************************/
-
-exprt create_dynamic_object(
-  const std::string &suffix,
-  const typet &type,
-  symbol_tablet &symbol_table,
-  bool is_concrete)
-{
-  symbolt value_symbol;
-
-  value_symbol.base_name="dynamic_object"+suffix;
-  value_symbol.name="ssa::"+id2string(value_symbol.base_name);
-  value_symbol.is_lvalue=true;
-  value_symbol.type=type;
-  value_symbol.type.set("#dynamic", true);
-  value_symbol.mode=ID_C;
-  symbol_table.add(value_symbol);
-
-  address_of_exprt address_of_object;
-
-  if(type.id()==ID_array)
-  {
-    address_of_object.type()=pointer_typet(value_symbol.type.subtype());
-    index_exprt index_expr(value_symbol.type.subtype());
-    index_expr.array()=value_symbol.symbol_expr();
-    index_expr.index()=gen_zero(index_type());
-    address_of_object.op0()=index_expr;
-  }
-  else
-  {
-    address_of_object.op0()=value_symbol.symbol_expr();
-    if(is_concrete)
-      address_of_object.op0().set("#concrete", true);
-    address_of_object.type()=pointer_typet(value_symbol.type);
-  }
-
-  return address_of_object;
 }
 
 /*******************************************************************\
@@ -165,9 +117,9 @@ Function: malloc_ssa
 
 \*******************************************************************/
 
-exprt malloc_ssa(
-  const side_effect_exprt &code,
-  const std::string &suffix,
+dynamic_objectt malloc_ssa(
+  exprt &code,
+  unsigned int loc_number,
   symbol_tablet &symbol_table,
   bool is_concrete,
   bool alloc_concrete)
@@ -237,19 +189,19 @@ exprt malloc_ssa(
 
   auto pointers=collect_pointer_vars(symbol_table, object_type);
 
-  exprt object=create_dynamic_object(
-    suffix, object_type, symbol_table, is_concrete);
+  auto dynobj=dynamic_objectt(loc_number, object_type);
+  exprt object=dynobj.create_instance(symbol_table, "", is_concrete);
+
   if(object.type()!=code.type())
     object=typecast_exprt(object, code.type());
   exprt result;
   if(!is_concrete && alloc_concrete)
   {
-    exprt concrete_object=create_dynamic_object(
-      suffix+"$co", object_type, symbol_table, true);
+    exprt concrete_object=dynobj.create_instance(symbol_table, "$co", true);
 
     // Create nondet symbol
     symbolt nondet_symbol;
-    nondet_symbol.base_name="nondet"+suffix;
+    nondet_symbol.base_name="nondet$"+loc_number;
     nondet_symbol.name="ssa::"+id2string(nondet_symbol.base_name);
     nondet_symbol.is_lvalue=true;
     nondet_symbol.type=bool_typet();
@@ -274,7 +226,8 @@ exprt malloc_ssa(
 
   result.set("#malloc_result", true);
 
-  return result;
+  code=result;
+  return dynobj;
 }
 
 
@@ -290,14 +243,14 @@ Function: replace_malloc_rec
 
 \*******************************************************************/
 
-static bool replace_malloc_rec(
+static void replace_malloc_rec(
   exprt &expr,
-  const std::string &suffix,
   symbol_tablet &symbol_table,
   const exprt &malloc_size,
   unsigned loc_number,
   bool is_concrete,
-  bool alloc_concrete)
+  bool alloc_concrete,
+  dynamic_objectst &dynamic_objects)
 {
   if(expr.id()==ID_side_effect &&
      to_side_effect_expr(expr).get_statement()==ID_malloc)
@@ -305,32 +258,22 @@ static bool replace_malloc_rec(
     assert(!malloc_size.is_nil());
     expr.op0()=malloc_size;
 
-    expr=malloc_ssa(
-      to_side_effect_expr(expr),
-      "$"+i2string(loc_number)+suffix,
+    auto dynobj=malloc_ssa(
+      expr,
+      loc_number,
       symbol_table,
       is_concrete,
       alloc_concrete);
-
-    return true;
+    dynamic_objects.add(loc_number, dynobj);
   }
   else
   {
-    bool result=false;
     Forall_operands(it, expr)
-    {
-      if(replace_malloc_rec(*it,
-                            suffix,
-                            symbol_table,
-                            malloc_size,
-                            loc_number,
-                            is_concrete,
-                            alloc_concrete))
       {
-        result=true;
+        replace_malloc_rec(
+          *it, symbol_table, malloc_size, loc_number, is_concrete,
+          alloc_concrete, dynamic_objects);
       }
-    }
-    return result;
   }
 }
 
@@ -346,12 +289,9 @@ Function: replace_malloc
 
 \*******************************************************************/
 
-bool replace_malloc(
-  goto_modelt &goto_model,
-  const std::string &suffix,
-  bool alloc_concrete)
+dynamic_objectst replace_malloc(goto_modelt &goto_model, bool alloc_concrete)
 {
-  bool result=false;
+  dynamic_objectst objects;
   Forall_goto_functions(f_it, goto_model.goto_functions)
   {
     goto_programt::const_targett loop_end=f_it->second.body.instructions.end();
@@ -401,20 +341,15 @@ bool replace_malloc(
             }
           }
         }
-        if(replace_malloc_rec(code_assign.rhs(),
-                              suffix,
-                              goto_model.symbol_table,
-                              malloc_size,
-                              i_it->location_number,
-                              loop_end==f_it->second.body.instructions.end(),
-                              alloc_concrete))
-        {
-          result=result || (loop_end!=f_it->second.body.instructions.end());
-        }
+        replace_malloc_rec(
+          code_assign.rhs(), goto_model.symbol_table, malloc_size,
+          i_it->location_number,
+          loop_end==f_it->second.body.instructions.end(),
+          alloc_concrete, objects);
       }
     }
   }
-  return result;
+  return objects;
 }
 
 /*******************************************************************\

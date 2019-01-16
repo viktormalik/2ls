@@ -18,6 +18,7 @@ Author: Peter Schrammel
 #include "tpolyhedra_domain.h"
 #include "util.h"
 #include "domain.h"
+#include <ssa/dynamic_object.h>
 
 #define SYMB_BOUND_VAR "symb_bound#"
 

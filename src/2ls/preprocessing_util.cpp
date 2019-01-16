@@ -834,6 +834,7 @@ void twols_parse_optionst::create_dynobj_instances(
           suffix="#"+std::to_string(i);
           obj_symbol.name=name+suffix;
           obj_symbol.base_name=base_name+suffix;
+          symbol_table.add(obj_symbol);
 
           exprt new_obj=address_of_exprt(obj_symbol.symbol_expr());
           if(abstract_obj.id()==ID_typecast)
