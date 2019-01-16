@@ -42,10 +42,9 @@ Author: Daniel Kroening, Peter Schrammel
 #include <cbmc/version.h>
 #include "version.h"
 
-#include <ssa/malloc_ssa.h>
-
 #include "graphml_witness_ext.h"
 #include <solver/summary_db.h>
+#include <ssa/dynamic_object.h>
 #include <ssa/dynobj_instance_analysis.h>
 
 #include "2ls_parse_options.h"
@@ -1247,8 +1246,8 @@ bool twols_parse_optionst::process_goto_program(
     // add loop ids
     goto_model.goto_functions.compute_loop_numbers();
 
-    // Replace malloc
-    auto dynamic_objects=replace_malloc(
+    // Replace mallocs by dynamic objects
+    auto dynamic_objects=collect_dynamic_objects(
       goto_model, options.get_bool_option("pointer-check"));
     dynamic_memory_detected=dynamic_objects.have_abstract();
 

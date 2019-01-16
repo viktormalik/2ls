@@ -9,6 +9,7 @@ Author: Viktor Malik, viktor.malik@gmail.com
 #ifndef CPROVER_2LS_SSA_DYNAMIC_OBJECT_H
 #define CPROVER_2LS_SSA_DYNAMIC_OBJECT_H
 
+#include <goto-programs/goto_model.h>
 #include <util/type.h>
 #include <set>
 #include <string>
@@ -24,19 +25,32 @@ Author: Viktor Malik, viktor.malik@gmail.com
 class dynamic_objectt
 {
 public:
-  dynamic_objectt(unsigned int loc, const typet &type);
+  dynamic_objectt(
+    const exprt &malloc_call,
+    unsigned int loc_number,
+    symbol_tablet &symbol_table,
+    bool is_concrete,
+    bool alloc_concrete);
 
   exprt create_instance(
     symbol_tablet &symbol_table,
     std::string inst_suffix,
     bool concrete);
 
+  exprt create_instance_guard(
+    exprt &instance_address,
+    symbol_tablet &symbol_table,
+    std::string inst_suffix,
+    bool concrete);
+
   bool is_abstract() const;
+  exprt get_expr() const;
 
 protected:
   unsigned loc;
   typet type;
   std::set<symbol_exprt> instances;
+  exprt expr;
 };
 
 /*******************************************************************\
@@ -55,6 +69,10 @@ public:
 protected:
   std::map<unsigned, dynamic_objectt> objects;
 };
+
+dynamic_objectst collect_dynamic_objects(
+  goto_modelt &goto_model,
+  bool alloc_concrete);
 
 int get_dynobj_line(const irep_idt &id);
 
