@@ -131,6 +131,8 @@ void dynobj_instance_domaint::rhs_concretisation(
   ai_baset &ai,
   const namespacet &ns)
 {
+  const dynamic_objectst &dyn_objs=
+    static_cast<dynobj_instance_analysist &>(ai).dynamic_objects;
   forall_operands(it, guard)
     {
       if(it->id()==ID_symbol || it->id()==ID_member)
@@ -151,8 +153,12 @@ void dynobj_instance_domaint::rhs_concretisation(
           // 2) then isolate for all values in value set of dereferences
           for(auto &v : value_set)
           {
-            auto &instances=must_alias_relations[v.symbol_expr()];
-            instances.isolate(*it);
+            if(dyn_objs.contains(v.symbol_expr()))
+            {
+              auto &instances=must_alias_relations[&dyn_objs.get(
+                v.symbol_expr())];
+              instances.isolate(*it);
+            }
           }
         }
       }
@@ -180,6 +186,8 @@ void dynobj_instance_domaint::transform(
   ai_baset &ai,
   const namespacet &ns)
 {
+  const dynamic_objectst &dyn_objs=
+    static_cast<dynobj_instance_analysist &>(ai).dynamic_objects;
   if(from->is_assign())
   {
     const code_assignt &assignment=to_code_assign(from->code);
@@ -192,15 +200,10 @@ void dynobj_instance_domaint::transform(
          CPROVER_PREFIX))
       return;
 
-    if(assignment.rhs().get_bool("#malloc_result"))
+    if(dyn_objs.contains(from->location_number))
     {
-      // For allocation site, the assigned pointer has no aliases
-      const auto &values=
-        static_cast<dynobj_instance_analysist &>(ai).value_analysis[to];
-      const auto lhs_deref=dereference(assignment.lhs(), values, "", ns);
-      auto value_set=values(lhs_deref, ns).value_set;
-      for(auto &v : value_set)
-        must_alias_relations[v.symbol_expr()].isolate(lhs);
+        // For allocation site, the assigned pointer has no aliases
+        must_alias_relations[&dyn_objs.get(from->location_number)].isolate(lhs);
     }
     else
     {
@@ -216,7 +219,11 @@ void dynobj_instance_domaint::transform(
       auto value_set=values(rhs_deref, ns).value_set;
       for(auto &v : value_set)
       {
-        auto &instances=must_alias_relations[v.symbol_expr()];
+        if(!dyn_objs.contains(v.symbol_expr()))
+          continue;
+
+        auto &dyn_obj=dyn_objs.get(v.symbol_expr());
+        auto &instances=must_alias_relations[&dyn_obj];
         instances.isolate(assignment.lhs());
         instances.make_union(assignment.lhs(), rhs);
 
@@ -233,7 +240,7 @@ void dynobj_instance_domaint::transform(
            id2string(to_symbol_expr(rhs).get_identifier()).find(
              "malloc$")!=std::string::npos)))
         {
-          live_pointers[v.symbol_expr()].insert(rhs);
+          live_pointers[&dyn_obj].insert(rhs);
         }
       }
     }
@@ -248,7 +255,8 @@ void dynobj_instance_domaint::transform(
     auto value_set=values(symbol, ns).value_set;
     for(auto &v : value_set)
     {
-      live_pointers[v.symbol_expr()].erase(symbol);
+      if(dyn_objs.contains(v.symbol_expr()))
+        live_pointers[&dyn_objs.get(v.symbol_expr())].erase(symbol);
     }
   }
 }
@@ -311,7 +319,7 @@ void dynobj_instance_domaint::output(
 {
   for(const auto &o : must_alias_relations)
   {
-    out << o.first.get_identifier() << ":\n";
+    out << o.first->get_name() << ":\n";
     for(const exprt &p : o.second)
     {
       size_t n;
@@ -329,4 +337,52 @@ void dynobj_instance_domaint::output(
     }
     out << "\n";
   }
+}
+
+/*******************************************************************\
+
+Function: dynobj_instance_analysist::calc_num_instances
+
+  Inputs:
+
+ Outputs:
+
+ Purpose: Calculate a minimal number of instances that the given
+          object must be split into so that the analysis is sound.
+          This is determined as the maximum number of distinct concrete
+          objects (within the abstract one) that are being pointed
+          by some live pointers in any location of the program.
+
+\*******************************************************************/
+unsigned int dynobj_instance_analysist::calc_num_instances(
+  const goto_programt &goto_program,
+  const dynamic_objectt *dyn_obj)
+{
+  unsigned result=1;
+  forall_goto_program_instructions(it, goto_program)
+  {
+    auto &dynobj_instances=(*this)[it];
+    auto live_pointers=dynobj_instances.live_pointers.find(dyn_obj);
+    if(live_pointers==dynobj_instances.live_pointers.end())
+      continue;
+
+    auto must_alias=dynobj_instances.must_alias_relations.find(dyn_obj);
+    if(must_alias==dynobj_instances.must_alias_relations.end())
+      continue;
+
+
+    std::set<size_t> alias_classes;
+    for(auto &expr : live_pointers->second)
+    {
+      size_t n;
+      must_alias->second.get_number(expr, n);
+      alias_classes.insert(must_alias->second.find_number(n));
+    }
+
+    if(result<alias_classes.size())
+    {
+      result=alias_classes.size();
+    }
+  }
+  return result;
 }

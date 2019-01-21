@@ -12,6 +12,7 @@ Author: Viktor Malik, viktor.malik@gmail.com
 #include <util/expr_util.h>
 #include <util/namespace.h>
 #include <util/pointer_offset_size.h>
+#include <util/simplify_expr.h>
 #include <util/std_code.h>
 #include <util/std_expr.h>
 
@@ -201,26 +202,14 @@ dynamic_objectt::dynamic_objectt(
   symbol_tablet &symbol_table,
   bool is_concrete,
   bool alloc_concrete):
-  loc(loc_number), type(determine_malloc_type(malloc_call.op0(), symbol_table))
+  loc(loc_number),
+  type(determine_malloc_type(malloc_call.op0(), symbol_table)),
+  malloc_type(malloc_call.type())
 {
-  auto pointers=collect_pointer_vars(symbol_table, type);
-
-  expr=create_instance(symbol_table, "", is_concrete);
-
-  if(expr.type()!=malloc_call.type())
-    expr=typecast_exprt(expr, malloc_call.type());
   if(!is_concrete && alloc_concrete)
-  {
-    exprt concrete_object=create_instance(symbol_table, "$co", true);
-    exprt guard=create_instance_guard(
-      concrete_object, symbol_table, "$co", true);
+    create_instance(symbol_table, "$co", true, false);
 
-    if(concrete_object.type()!=malloc_call.type())
-      concrete_object=typecast_exprt(concrete_object, malloc_call.type());
-    expr=if_exprt(guard, concrete_object, expr);
-  }
-
-  expr.set("#malloc_result", true);
+  create_instance(symbol_table, "", is_concrete, false);
 }
 
 /*******************************************************************\
@@ -230,21 +219,24 @@ Function: dynamic_object::create_instance
   Inputs: symbol_table
           inst_suffix Suffix of the new instance
           concrete True if the instance represents a concrete object
+          nodet True if the instance is created non-deterministically
 
- Outputs: Expression holding address of the newly created symbol.
+ Outputs:
 
  Purpose: Create a symbol representing an instance of the dynamic
-          object. The new symbol is inserted into the symbol table
-          and into the set of instances of 'this'.
+          object. The new symbol is inserted into the symbol table.
+          Also an allocation guard for the instance is created.
 
 \*******************************************************************/
-exprt dynamic_objectt::create_instance(
+void dynamic_objectt::create_instance(
   symbol_tablet &symbol_table,
   std::string inst_suffix,
-  bool concrete)
+  bool concrete,
+  bool nondet)
 {
+  // Create new symbol
   symbolt symbol;
-  symbol.base_name="dynamic_object$"+std::to_string(loc)+inst_suffix;
+  symbol.base_name=get_name()+inst_suffix;
   symbol.name="ssa::"+id2string(symbol.base_name);
   symbol.is_lvalue=true;
   symbol.type=type;
@@ -252,10 +244,8 @@ exprt dynamic_objectt::create_instance(
   symbol.mode=ID_C;
 
   symbol_table.add(symbol);
-  instances.insert(symbol.symbol_expr());
 
   address_of_exprt address_of_object;
-
   if(type.id()==ID_array)
   {
     address_of_object.type()=pointer_typet(symbol.type.subtype());
@@ -272,7 +262,9 @@ exprt dynamic_objectt::create_instance(
     address_of_object.type()=pointer_typet(symbol.type);
   }
 
-  return address_of_object;
+  exprt guard=create_instance_guard(
+    address_of_object, symbol_table, inst_suffix, concrete, nondet);
+  instances.emplace_back(guard, symbol.symbol_expr());
 }
 
 /*******************************************************************\
@@ -283,6 +275,7 @@ Function: dynamic_object::create_instance_guard
           symbol_table
           inst_suffix Suffix of the new instance
           concrete True if the instance represents a concrete object
+          nodet True if the instance is created non-deterministically
 
  Outputs:
 
@@ -294,18 +287,24 @@ exprt dynamic_objectt::create_instance_guard(
   exprt &instance_address,
   symbol_tablet &symbol_table,
   std::string inst_suffix,
-  bool concrete)
+  bool concrete,
+  bool nondet)
 {
-  // Fresh free boolean symbol
-  symbolt nondet_symbol;
-  nondet_symbol.base_name="$guard#os"+std::to_string(loc)+inst_suffix;
-  nondet_symbol.name=nondet_symbol.base_name;
-  nondet_symbol.is_lvalue=true;
-  nondet_symbol.type=bool_typet();
-  nondet_symbol.mode=ID_C;
-  symbol_table.add(nondet_symbol);
+  exprt guard=true_exprt();
+  if(nondet)
+  {
+    // Fresh free boolean symbol (non-determinism)
+    symbolt nondet_symbol;
+    nondet_symbol.base_name="$guard#os"+std::to_string(loc)+inst_suffix;
+    nondet_symbol.name=nondet_symbol.base_name;
+    nondet_symbol.is_lvalue=true;
+    nondet_symbol.type=bool_typet();
+    nondet_symbol.mode=ID_C;
+    symbol_table.add(nondet_symbol);
 
-  exprt guard=nondet_symbol.symbol_expr();
+    guard=nondet_symbol.symbol_expr();
+  }
+
   if(concrete)
   {
     auto pointers=collect_pointer_vars(symbol_table, type);
@@ -319,6 +318,7 @@ exprt dynamic_objectt::create_instance_guard(
       not_exprt(disjunction(pointer_equs)));
   }
 
+  simplify_expr(guard, namespacet(symbol_table));
   return guard;
 }
 
@@ -345,14 +345,54 @@ Function: dynamic_object::get_expr
 
   Inputs:
 
- Outputs:
+ Outputs: Expression corresponding to the given abstract object.
+          It is a choice from object instances based on instance
+          allocation guards.
 
  Purpose:
 
 \*******************************************************************/
 exprt dynamic_objectt::get_expr() const
 {
+  assert(!instances.empty());
+  auto inst_it=instances.rbegin();
+
+  exprt expr=address_of_exprt(inst_it->second);
+  if(expr.type()!=malloc_type)
+    expr=typecast_exprt(expr, malloc_type);
+
+  while(++inst_it!=instances.rend())
+  {
+    exprt obj=address_of_exprt(inst_it->second);
+    if(obj.type()!=malloc_type)
+      obj=typecast_exprt(obj, malloc_type);
+    expr=if_exprt(inst_it->first, obj, expr);
+  }
+  expr.set("#malloc_result", true);
   return expr;
+}
+
+std::string dynamic_objectt::get_name() const
+{
+  return "dynamic_object$"+std::to_string(loc);
+}
+
+/*******************************************************************\
+
+Function: dynamic_objects::drop_last_instance
+
+  Inputs:
+
+ Outputs:
+
+ Purpose: Removes the last instance from the object.
+          This is called when the last instance is replaced by a set
+          of instances.
+
+\*******************************************************************/
+void dynamic_objectt::drop_last_instance()
+{
+  instances.pop_back();
 }
 
 /*******************************************************************\
@@ -377,6 +417,24 @@ dynamic_objectt &dynamic_objectst::get(unsigned loc)
 
 Function: dynamic_objects::get
 
+  Inputs: loc Location number
+
+ Outputs: Dynamic object allocated at the given location.
+
+ Purpose:
+
+\*******************************************************************/
+const dynamic_objectt &dynamic_objectst::get(unsigned loc) const
+{
+  auto obj=objects.find(loc);
+  assert(obj!=objects.end());
+  return obj->second;
+}
+
+/*******************************************************************\
+
+Function: dynamic_objects::get
+
   Inputs: obj_expr Symbol of an instance of a dynamic object
 
  Outputs: Dynamic object corresponding to the given instance.
@@ -389,6 +447,59 @@ dynamic_objectt &dynamic_objectst::get(symbol_exprt obj_expr)
   int loc=get_dynobj_line(obj_expr.get_identifier());
   assert(loc>=0);
   return get((unsigned) loc);
+}
+
+/*******************************************************************\
+
+Function: dynamic_objects::get
+
+  Inputs: obj_expr Symbol of an instance of a dynamic object
+
+ Outputs: Dynamic object corresponding to the given instance.
+
+ Purpose:
+
+\*******************************************************************/
+const dynamic_objectt &dynamic_objectst::get(symbol_exprt obj_expr) const
+{
+  int loc=get_dynobj_line(obj_expr.get_identifier());
+  assert(loc>=0);
+  return get((unsigned) loc);
+}
+
+/*******************************************************************\
+
+Function: dynamic_objects::contains
+
+  Inputs: loc Program location
+
+ Outputs: True if there is a dynamic object allocated at the given
+          location.
+
+ Purpose:
+
+\*******************************************************************/
+bool dynamic_objectst::contains(unsigned loc) const
+{
+  return objects.find(loc)!=objects.end();
+}
+
+/*******************************************************************\
+
+Function: dynamic_objects::contains
+
+  Inputs: obj_expr Symbol of an instance of a dynamic object
+
+ Outputs: True if there is a dynamic object corresponding to the given
+          instance.
+
+ Purpose:
+
+\*******************************************************************/
+bool dynamic_objectst::contains(symbol_exprt obj_expr) const
+{
+  int loc=get_dynobj_line(obj_expr.get_identifier());
+  return loc>=0 && objects.find((unsigned) loc)!=objects.end();
 }
 
 /*******************************************************************\

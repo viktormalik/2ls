@@ -717,159 +717,52 @@ void twols_parse_optionst::remove_dead_goto(goto_modelt &goto_model)
 
 /*******************************************************************\
 
-Function: twols_parse_optionst::compute_dynobj_instances
+Function: twols_parse_optionst::split_dynamic_objects
 
   Inputs:
 
  Outputs:
 
- Purpose: For each allocation site, compute the number of objects
-          that must be used to soundly represent all objects allocated
-          at the given site.
+ Purpose: Split dynamic objects into multiple instances for sound
+          over-approximation.
 
 \*******************************************************************/
-void twols_parse_optionst::compute_dynobj_instances(
-  const goto_programt &goto_program,
-  const dynobj_instance_analysist &analysis,
-  std::map<symbol_exprt, size_t> &instance_counts,
-  const namespacet &ns)
+void twols_parse_optionst::split_dynamic_objects(
+  goto_modelt &goto_model,
+  dynamic_objectst &dynamic_objects)
 {
-  forall_goto_program_instructions(it, goto_program)
-  {
-    auto &analysis_value=analysis[it];
-    for(auto &obj : analysis_value.live_pointers)
-    {
-      auto must_alias=analysis_value.must_alias_relations.find(obj.first);
-      if(must_alias==analysis_value.must_alias_relations.end())
-        continue;
-
-      std::set<size_t> alias_classes;
-      for(auto &expr : obj.second)
-      {
-        size_t n;
-        must_alias->second.get_number(expr, n);
-        alias_classes.insert(must_alias->second.find_number(n));
-      }
-
-      if(instance_counts.find(obj.first)==instance_counts.end() ||
-         instance_counts.at(obj.first)<alias_classes.size())
-      {
-        instance_counts[obj.first]=alias_classes.size();
-      }
-    }
-  }
-}
-
-/*******************************************************************\
-
-Function: twols_parse_optionst::create_dynobj_instances
-
-  Inputs:
-
- Outputs:
-
- Purpose: For each allocation site, split the allocated abstract
-          dynamic object into multiple in order to preserve soundness
-          of the analysis.
-
-\*******************************************************************/
-void twols_parse_optionst::create_dynobj_instances(
-  goto_programt &goto_program,
-  const std::map<symbol_exprt, size_t> &instance_counts,
-  symbol_tablet &symbol_table)
-{
-  Forall_goto_program_instructions(it, goto_program)
-  {
-    if(it->is_assign())
-    {
-      auto &assign=to_code_assign(it->code);
-      if(assign.rhs().get_bool("#malloc_result"))
-      {
-        exprt &rhs=assign.rhs();
-        exprt &abstract_obj=rhs.id()==ID_if ? to_if_expr(rhs).false_case()
-                                            : rhs;
-        exprt &address=abstract_obj.id()==ID_typecast ?
-                       to_typecast_expr(abstract_obj).op() : abstract_obj;
-        if(address.id()!=ID_address_of)
-          continue;
-        exprt &obj=to_address_of_expr(address).object();
-        if(obj.id()!=ID_symbol)
-          continue;
-
-        if(obj.get_bool("#concrete"))
-          continue;
-
-        if(instance_counts.find(to_symbol_expr(obj))==instance_counts.end())
-          continue;
-
-        size_t count=instance_counts.at(to_symbol_expr(obj));
-        if(count<=1)
-          continue;
-
-        symbolt obj_symbol=
-          symbol_table.lookup(to_symbol_expr(obj).get_identifier());
-
-        const std::string name=id2string(obj_symbol.name);
-        const std::string base_name=id2string(obj_symbol.base_name);
-        std::string suffix="#"+std::to_string(0);
-
-        obj_symbol.name=name+suffix;
-        obj_symbol.base_name=base_name+suffix;
-        symbol_table.add(obj_symbol);
-
-        exprt new_rhs=address_of_exprt(obj_symbol.symbol_expr());
-        if(abstract_obj.id()==ID_typecast)
-          new_rhs=typecast_exprt(new_rhs, rhs.type());
-        new_rhs.set("#malloc_result", true);
-
-        for(size_t i=1; i<count; ++i)
-        {
-          symbolt nondet;
-          nondet.type=bool_typet();
-          nondet.name="$guard#os"+std::to_string(it->location_number)+"#"+
-                      std::to_string(i);
-          nondet.base_name=nondet.name;
-          nondet.pretty_name=nondet.name;
-          symbol_table.add(nondet);
-
-          suffix="#"+std::to_string(i);
-          obj_symbol.name=name+suffix;
-          obj_symbol.base_name=base_name+suffix;
-          symbol_table.add(obj_symbol);
-
-          exprt new_obj=address_of_exprt(obj_symbol.symbol_expr());
-          if(abstract_obj.id()==ID_typecast)
-            new_obj=typecast_exprt(new_obj, rhs.type());
-          new_rhs=if_exprt(
-            nondet.symbol_expr(), new_obj, new_rhs);
-          new_rhs.set("#malloc_result", true);
-        }
-
-        abstract_obj=new_rhs;
-        abstract_obj.set("#malloc_result", true);
-      }
-    }
-  }
-}
-
-std::map<symbol_exprt, size_t> twols_parse_optionst::split_dynamic_objects(
-  goto_modelt &goto_model)
-{
-  std::map<symbol_exprt, size_t> dynobj_instances;
   Forall_goto_functions(f_it, goto_model.goto_functions)
   {
     if(!f_it->second.body_available())
       continue;
     namespacet ns(goto_model.symbol_table);
     ssa_value_ait value_analysis(f_it->second, ns, ssa_heap_analysist(ns));
-    dynobj_instance_analysist do_inst(f_it->second, ns, value_analysis);
+    dynobj_instance_analysist do_inst(
+      f_it->second, ns, value_analysis,
+      dynamic_objects);
 
-    compute_dynobj_instances(
-      f_it->second.body, do_inst, dynobj_instances, ns);
-    create_dynobj_instances(
-      f_it->second.body, dynobj_instances, goto_model.symbol_table);
+    Forall_goto_program_instructions(it, f_it->second.body)
+    {
+      if(it->is_assign())
+      {
+        auto &assign=to_code_assign(it->code);
+        if(dynamic_objects.contains(it->location_number))
+        {
+          auto dynamic_object=dynamic_objects.get(it->location_number);
+          unsigned inst_count=do_inst.calc_num_instances(
+            f_it->second.body, &dynamic_object);
+
+          dynamic_object.drop_last_instance();
+          for(unsigned i=0; i<inst_count; ++i)
+          {
+            dynamic_object.create_instance(
+              goto_model.symbol_table, "#"+std::to_string(i), false, true);
+          }
+          assign.rhs()=dynamic_object.get_expr();
+        }
+      }
+    }
   }
-  return dynobj_instances;
 }
 
 /*******************************************************************\

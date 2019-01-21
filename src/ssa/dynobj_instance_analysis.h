@@ -23,6 +23,7 @@ Description: In some cases, multiple instances must be used so that the
 #include <util/union_find.h>
 #include "ssa_object.h"
 #include "ssa_value_set.h"
+#include "dynamic_object.h"
 
 /*******************************************************************\
 
@@ -144,9 +145,9 @@ class dynobj_instance_domaint:public ai_domain_baset
 public:
   // Must-alias relation for each dynamic object (corresponding to allocation
   // site).
-  std::map<symbol_exprt, must_alias_setst> must_alias_relations;
+  std::map<const dynamic_objectt *, must_alias_setst> must_alias_relations;
   // Set of live pointers pointing to dynamic object.
-  std::map<symbol_exprt, std::set<exprt>> live_pointers;
+  std::map<const dynamic_objectt *, std::set<exprt>> live_pointers;
 
   void transform(
     locationt from,
@@ -176,14 +177,20 @@ public:
   dynobj_instance_analysist(
     const goto_functionst::goto_functiont &goto_function,
     const namespacet &ns,
-    ssa_value_ait &_value_ai):
-    value_analysis(_value_ai)
+    ssa_value_ait &_value_ai,
+    const dynamic_objectst &_dyn_objs):
+    value_analysis(_value_ai), dynamic_objects(_dyn_objs)
   {
     operator()(goto_function, ns);
   }
 
+  unsigned int calc_num_instances(
+    const goto_programt &goto_program,
+    const dynamic_objectt *dyn_obj);
+
 protected:
   ssa_value_ait &value_analysis;
+  const dynamic_objectst &dynamic_objects;
 
   friend class dynobj_instance_domaint;
 };
