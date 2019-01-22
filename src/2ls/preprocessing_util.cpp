@@ -748,7 +748,7 @@ void twols_parse_optionst::split_dynamic_objects(
         auto &assign=to_code_assign(it->code);
         if(dynamic_objects.contains(it->location_number))
         {
-          auto dynamic_object=dynamic_objects.get(it->location_number);
+          auto &dynamic_object=dynamic_objects.get(it->location_number);
           unsigned inst_count=do_inst.calc_num_instances(
             f_it->second.body, &dynamic_object);
 

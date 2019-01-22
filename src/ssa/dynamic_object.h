@@ -32,6 +32,13 @@ public:
     bool is_concrete,
     bool alloc_concrete);
 
+  // Disable copying so that there is always a single dynamic object (we work
+  // with its address).
+  dynamic_objectt(const dynamic_objectt &)=delete;
+  dynamic_objectt &operator=(const dynamic_objectt &)=delete;
+  dynamic_objectt(dynamic_objectt &&)=default;
+  dynamic_objectt &operator=(dynamic_objectt &&)=default;
+
   void create_instance(
     symbol_tablet &symbol_table,
     std::string inst_suffix,
@@ -73,7 +80,7 @@ public:
 
   bool contains(unsigned loc) const;
   bool contains(symbol_exprt obj_expr) const;
-  void add(unsigned loc, dynamic_objectt &obj);
+  void add(unsigned loc, dynamic_objectt &&obj);
   bool have_abstract() const;
 
 protected:

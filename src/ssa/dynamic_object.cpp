@@ -513,9 +513,9 @@ Function: dynamic_objects::add
  Purpose: Add a new dynamic object to the set.
 
 \*******************************************************************/
-void dynamic_objectst::add(unsigned int loc, dynamic_objectt &obj)
+void dynamic_objectst::add(unsigned int loc, dynamic_objectt &&obj)
 {
-  objects.insert(std::make_pair(loc, obj));
+  objects.emplace(loc, std::move(obj));
 }
 
 /*******************************************************************\
@@ -575,7 +575,7 @@ static void replace_malloc_rec(
       is_concrete,
       alloc_concrete);
     expr=dynobj.get_expr();
-    dynamic_objects.add(loc_number, dynobj);
+    dynamic_objects.add(loc_number, std::move(dynobj));
   }
   else
   {
