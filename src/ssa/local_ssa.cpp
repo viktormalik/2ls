@@ -465,9 +465,6 @@ void local_SSAt::build_transfer(locationt loc)
        id2string(code_assign.rhs().get(ID_identifier)).
        find(TEMPLATE_PREFIX)!=std::string::npos) return;
 
-    // build allocation guards map
-    collect_allocation_guards(code_assign, loc);
-
     exprt deref_lhs=dereference(code_assign.lhs(), loc);
     exprt deref_rhs=dereference(code_assign.rhs(), loc);
 
@@ -2124,38 +2121,6 @@ exprt local_SSAt::concretise_symbolic_deref_rhs(
 
 /********************************************************************\
 
-Function: local_SSAt::collect_allocation_guards
-
-  Inputs:
-
- Outputs:
-
- Purpose: Collect allocation guards for the given location
-
-\*******************************************************************/
-
-void local_SSAt::collect_allocation_guards(
-  const code_assignt &assign,
-  locationt loc)
-{
-  if(!assign.rhs().get_bool("#malloc_result"))
-    return;
-
-  exprt rhs=assign.rhs();
-  if(rhs.id()==ID_typecast)
-    rhs=to_typecast_expr(rhs).op();
-  if(rhs.id()==ID_if)
-  {
-    get_alloc_guard_rec(
-      to_if_expr(rhs).true_case(), read_rhs(to_if_expr(rhs).cond(), loc));
-    get_alloc_guard_rec(
-      to_if_expr(rhs).false_case(),
-      read_rhs(not_exprt(to_if_expr(rhs).cond()), loc));
-  }
-}
-
-/********************************************************************\
-
 Function: local_SSAt::collect_record_frees
 
   Inputs:
@@ -2180,37 +2145,6 @@ void local_SSAt::collect_record_frees(local_SSAt::locationt loc)
       (--nodes.end())->record_free=symbol;
     }
   }
-}
-
-/********************************************************************\
-
-Function: local_SSAt::get_alloc_guard_rec
-
-  Inputs:
-
- Outputs:
-
- Purpose:
-
-\*******************************************************************/
-void local_SSAt::get_alloc_guard_rec(const exprt &expr, exprt guard)
-{
-  if(expr.id()==ID_symbol && expr.type().get_bool("#dynamic"))
-  {
-    allocation_guards.emplace(to_symbol_expr(expr).get_identifier(), guard);
-  }
-  else if(expr.id()==ID_if)
-  {
-    get_alloc_guard_rec(
-      to_if_expr(expr).true_case(), and_exprt(guard, to_if_expr(expr).cond()));
-    get_alloc_guard_rec(
-      to_if_expr(expr).false_case(),
-      and_exprt(guard, not_exprt(to_if_expr(expr).cond())));
-  }
-  else if(expr.id()==ID_typecast)
-    get_alloc_guard_rec(to_typecast_expr(expr).op(), guard);
-  else if(expr.id()==ID_address_of)
-    get_alloc_guard_rec(to_address_of_expr(expr).object(), guard);
 }
 
 /********************************************************************\
