@@ -749,16 +749,19 @@ void twols_parse_optionst::split_dynamic_objects(
         if(dynamic_objects.contains(it->location_number))
         {
           auto &dynamic_object=dynamic_objects.get(it->location_number);
-          unsigned inst_count=do_inst.calc_num_instances(
-            f_it->second.body, &dynamic_object);
-
-          dynamic_object.drop_last_instance();
-          for(unsigned i=0; i<inst_count; ++i)
+          if(dynamic_object.is_abstract())
           {
-            dynamic_object.create_instance(
-              goto_model.symbol_table, "#"+std::to_string(i), false, true);
+            unsigned inst_count=do_inst.calc_num_instances(
+              f_it->second.body, &dynamic_object);
+
+            dynamic_object.drop_last_instance();
+            for(unsigned i=0; i<inst_count; ++i)
+            {
+              dynamic_object.create_instance(
+                goto_model.symbol_table, "#"+std::to_string(i), false, true);
+            }
+            assign.rhs()=dynamic_object.get_expr();
           }
-          assign.rhs()=dynamic_object.get_expr();
         }
       }
     }

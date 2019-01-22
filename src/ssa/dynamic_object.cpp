@@ -17,6 +17,7 @@ Author: Viktor Malik, viktor.malik@gmail.com
 #include <util/std_expr.h>
 
 #include <algorithm>
+#include <iostream>
 
 #include "dynamic_object.h"
 
@@ -264,7 +265,10 @@ void dynamic_objectt::create_instance(
 
   exprt guard=create_instance_guard(
     address_of_object, symbol_table, inst_suffix, concrete, nondet);
-  instances.emplace_back(guard, symbol.symbol_expr());
+  symbol_exprt instance=symbol.symbol_expr();
+  if(concrete)
+    instance.set("#concrete", true);
+  instances.emplace_back(guard, instance);
 }
 
 /*******************************************************************\
@@ -336,7 +340,7 @@ Function: dynamic_object::is_abstract
 \*******************************************************************/
 bool dynamic_objectt::is_abstract() const
 {
-  return instances.size()>1;
+  return instances.size()>1 || !instances[0].second.get_bool("#concrete");
 }
 
 /*******************************************************************\
