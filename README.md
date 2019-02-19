@@ -1,5 +1,14 @@
 [![Build Status][build_img]][travis]
 
+CHANGED FILES
+=============
+ssa\_analyzer.h
+ssa\_analyzer.cpp
+domain.h
+heap\_domain.h
+heap\_domain.cpp
+
+
 About
 =====
 

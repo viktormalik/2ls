@@ -86,6 +86,11 @@ public:
     exprt::operandst &cond_exprs);
 
   bool edit_row(const rowt &row, valuet &inv, bool improved);
+
+  // TODO --------------------------------------------------------
+  virtual std::vector<std::string> identify_invariant_imprecision(
+    const valuet &value) override;
+  // -------------------------------------------------------------
 };
 
 #endif // CPROVER_2LS_DOMAINS_HEAP_TPOLYHEDRA_DOMAIN_H

@@ -119,3 +119,40 @@ void heap_tpolyhedra_domaint::set_smt_values(
   size_t row)
 {
 }
+
+/*******************************************************************\
+
+Function: heap_tpolyhedra_domaint::identify_invariant_imprecision
+
+  Inputs: TODO
+
+ Outputs: TODO
+
+ Purpose: TODO
+
+\*******************************************************************/
+std::vector<std::string> heap_tpolyhedra_domaint::identify_invariant_imprecision(
+  const domaint::valuet &value)
+{
+  const heap_tpolyhedra_valuet &v=
+    static_cast<const heap_tpolyhedra_valuet &>(value);
+
+  // invariant identif imprecision for both 'sub-domains'
+  // heap domain variables
+  std::vector<std::string> ssa_vars=heap_domain.identify_invariant_imprecision(
+    v.heap_value);
+
+  // tpolyhedra domain variables
+  std::vector<std::string> tpoly_vars=
+    polyhedra_domain.identify_invariant_imprecision(v.tpolyhedra_value);
+
+  // concatenate vectors
+  ssa_vars.reserve(ssa_vars.size() + tpoly_vars.size());
+  ssa_vars.insert(
+    ssa_vars.end(),
+    std::make_move_iterator(tpoly_vars.begin()),
+    std::make_move_iterator(tpoly_vars.end())
+  );
+
+  return ssa_vars;
+}
