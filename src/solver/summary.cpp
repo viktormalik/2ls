@@ -68,6 +68,11 @@ void summaryt::output(std::ostream &out, const namespacet &ns) const
 #endif
   out << std::endl;
   out << "terminates: " << threeval2string(terminates) << std::endl;
+
+  // TODO output imprecise variables identified inside forward invariant
+  if (opt_imprecise)
+    out_invariant_imprecise_vars(out);
+  // ---------------------------------
 }
 
 void summaryt::combine_and(exprt &olde, const exprt &newe)
@@ -134,6 +139,67 @@ void summaryt::set_value_domains(const local_SSAt &SSA)
   value_domain_in=SSA.ssa_value_ai[entry_loc];
   value_domain_out=SSA.ssa_value_ai[exit_loc];
 }
+
+/*******************************************************************\
+
+Function: summaryt::out_invariant_imprecise_vars
+
+  Inputs: Output stream
+
+ Outputs:
+
+ Purpose: Outputs statistics about identified imprecise variables 
+          inside generated forward invariant
+
+\*******************************************************************/
+void summaryt::out_invariant_imprecise_vars(std::ostream &out) const
+{
+  out << "invariant imprecise variables:" << std::endl;
+
+  // counter of variables
+  unsigned nth_var=1;
+
+  for (auto &var : imprecise_vars_summary)
+  {
+    out << ' ' << nth_var << ':';
+    nth_var++;
+
+    // does not have a location -> input variable
+    if (var.loophead_loc.empty())
+    {
+      out << " Input variable: \"" << var.pretty_name << '"' << std::endl;
+      continue; 
+    }
+
+    out << " Imprecise value of ";
+    // static variables
+    if (var.dyn_mem_field.empty())
+    {
+      out << "variable \"" << var.pretty_name << '"';
+    }
+    // dynamic variables
+    else
+    {
+      out << '"' << var.dyn_mem_field << "\" field of \"" << var.pretty_name 
+          << "\" allocated at line " << var.dyn_alloc_loc << ';';
+    }
+
+    out << " at the end of the loop; starting at line " << var.loophead_loc 
+        << std::endl;
+  }
+}
+
+/*******************************************************************\
+
+Function: threeval2string
+
+  Inputs:
+
+ Outputs:
+
+ Purpose:
+
+\*******************************************************************/
 
 std::string threeval2string(threevalt v)
 {

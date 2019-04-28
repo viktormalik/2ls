@@ -28,6 +28,18 @@ class summaryt
   typedef std::list<symbol_exprt> var_listt;
   typedef std::set<symbol_exprt> var_sett;
 
+  // TODO -------------------------------------------
+  typedef struct
+  {
+    irep_idt loophead_loc;   // loop-head location
+    irep_idt dyn_mem_field;  // dynamic object memory field name
+    irep_idt dyn_alloc_loc;  // dynamic object allocation location
+    irep_idt pretty_name;    // variable pretty name
+  } imprecise_vart;
+
+  typedef std::vector<imprecise_vart> imprecise_varst;
+  // -------------------------------------------------
+
   summaryt() :
     fw_precondition(nil_exprt()),
     fw_transformer(nil_exprt()),
@@ -39,7 +51,8 @@ class summaryt
     aux_precondition(nil_exprt()),
     termination_argument(nil_exprt()),
     terminates(UNKNOWN),
-    mark_recompute(false) {}
+    mark_recompute(false),
+    opt_imprecise(false) {}
 
   var_listt params;
   var_sett globals_in, globals_out;
@@ -60,6 +73,14 @@ class summaryt
 
   bool mark_recompute; // to force recomputation of the summary
                        // (used for invariant reuse in k-induction)
+
+  // TODO ---------------------------------------------------
+  imprecise_varst imprecise_vars_summary;
+
+  bool opt_imprecise;   // whether the imprecise vars header should be output
+
+  void out_invariant_imprecise_vars(std::ostream &out) const;
+  // --------------------------------------------------------
 
   void output(std::ostream &out, const namespacet &ns) const;
 

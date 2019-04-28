@@ -25,6 +25,9 @@ class ssa_analyzert:public messaget
 public:
   typedef strategy_solver_baset::constraintst constraintst;
   typedef strategy_solver_baset::var_listt var_listt;
+  // TODO ------------------------------------------
+  typedef summaryt::imprecise_varst imprecise_varst;
+  // -----------------------------------------------
 
   ssa_analyzert():
     result(NULL),
@@ -62,7 +65,9 @@ public:
   std::string get_pretty_name(const std::string &name);
 
   int get_field_loc(const std::string &name);
-  std::string get_dynamic_member(const std::string &name);
+  std::string get_dynamic_field(const std::string &name);
+
+  imprecise_varst get_imprecise_vars() { return vars_summary; }
   // --------------------------------------------------
 
 protected:
@@ -72,7 +77,9 @@ protected:
   // statistics
   unsigned solver_instances;
   unsigned solver_calls;
+  // TODO ---------------------
+  imprecise_varst vars_summary;
+  // --------------------------
 };
 
 #endif
-

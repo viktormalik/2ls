@@ -890,7 +890,7 @@ std::vector<std::string> tpolyhedra_domaint::identify_invariant_imprecision(
   {
     exprt tmpl_expr=templ[row].expr;
 
-    // only the "maximum" row of both rows is compared
+    // save the name of the first row of the template row pair
     if (first_row)
     {
       first_row_val=get_row_value(row, templ_val);
