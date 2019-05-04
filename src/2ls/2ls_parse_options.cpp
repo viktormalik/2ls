@@ -336,10 +336,8 @@ void twols_parse_optionst::get_command_line_options(optionst &options)
     options.set_option("graphml-witness", cmdline.get_value("graphml-witness"));
   if(cmdline.isset("json-cex"))
     options.set_option("json-cex", cmdline.get_value("json-cex"));
-  // TODO ------------------------------------
   if(cmdline.isset("show-imprecise-vars"))
     options.set_option("show-imprecise-vars", true);
-  // -----------------------------------------
 }
 
 /// invoke main modules

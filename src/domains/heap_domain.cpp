@@ -1473,48 +1473,34 @@ const exprt heap_domaint::get_points_to_dest(
   else
     return nil_exprt();
 }
-/*******************************************************************\
 
-Function: heap_domaint::identify_invariant_imprecision
-
-  Inputs: Computed invariant
-
- Outputs: Vector of imprecise SSA variable names
-
- Purpose: Identify imprecise template variables of invariant
-
-\*******************************************************************/
+/// Identify imprecise template variables of invariant
+/// \param value: Computed invariant
+/// \return Vector of imprecise SSA variable names
 std::vector<std::string> heap_domaint::identify_invariant_imprecision(
   const domaint::valuet &value)
 {
-  // get corresponding template row values
+  // Get the corresponding template row values
   const heap_valuet &val=static_cast<const heap_valuet &>(value);
   assert(val.size()==templ.size());
 
-  // vector for saving ssa variable names
+  // Vector of ssa variable names
   std::vector<std::string> ssa_vars;
- 
-  for (rowt row=0; row<templ.size(); row++)
+
+  for(rowt row=0; row<templ.size(); ++row)
   {
-    exprt row_expr=templ[row].expr;
-    const exprt row_val=val[row].get_row_expr(row_expr, false);
-    
-    // row value is nondeterministic
-    if (row_val.is_true()) 
+    const exprt &row_expr=templ[row].expr;
+    const exprt &row_val=val[row].get_row_expr(row_expr, false);
+
+    // Row value is nondeterministic
+    if(row_val.is_true())
     {
-      // Only template expressions that are of symbol type
-      if (row_expr.id()!=ID_symbol)
-        continue;
-
-      // the template row expression variable name
-      std::string expr_name=from_expr(domaint::ns, "", row_expr);
-
-//      debug() << ssa_vars.size()+1 << ": " << expr_name << "\n";
-//        << "\tValue: " << from_expr(domaint::ns, "", row_val) << "\n";
-
-      ssa_vars.push_back(expr_name);
+      // skip any CPROVER symobls
+      if(row_expr.id()==ID_symbol && !is_cprover_symbol(row_expr))
+        ssa_vars.push_back(from_expr(domaint::ns, "", row_expr));
     }
   }
 
   return ssa_vars;
 }
+

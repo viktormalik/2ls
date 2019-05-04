@@ -69,10 +69,9 @@ void summaryt::output(std::ostream &out, const namespacet &ns) const
   out << std::endl;
   out << "terminates: " << threeval2string(terminates) << std::endl;
 
-  // TODO output imprecise variables identified inside forward invariant
-  if (opt_imprecise)
+  // output imprecise variables identified inside forward invariant
+  if(!imprecise_vars_summary.empty())
     out_invariant_imprecise_vars(out);
-  // ---------------------------------
 }
 
 void summaryt::combine_and(exprt &olde, const exprt &newe)
@@ -140,18 +139,9 @@ void summaryt::set_value_domains(const local_SSAt &SSA)
   value_domain_out=SSA.ssa_value_ai[exit_loc];
 }
 
-/*******************************************************************\
-
-Function: summaryt::out_invariant_imprecise_vars
-
-  Inputs: Output stream
-
- Outputs:
-
- Purpose: Outputs statistics about identified imprecise variables 
-          inside generated forward invariant
-
-\*******************************************************************/
+/// Outputs statistics about identified imprecise variables
+///   inside generated forward invariant
+/// \param out: Output stream
 void summaryt::out_invariant_imprecise_vars(std::ostream &out) const
 {
   out << "invariant imprecise variables:" << std::endl;
@@ -159,47 +149,39 @@ void summaryt::out_invariant_imprecise_vars(std::ostream &out) const
   // counter of variables
   unsigned nth_var=1;
 
-  for (auto &var : imprecise_vars_summary)
+  for(auto &var : imprecise_vars_summary)
   {
+    // has no name, no need to print
+    if(var.pretty_name.empty())
+      continue;
+
     out << ' ' << nth_var << ':';
     nth_var++;
 
     // does not have a location -> input variable
-    if (var.loophead_loc.empty())
+    if(var.loophead_line.empty())
     {
       out << " Input variable: \"" << var.pretty_name << '"' << std::endl;
-      continue; 
+      continue;
     }
 
     out << " Imprecise value of ";
     // static variables
-    if (var.dyn_mem_field.empty())
+    if(var.dyn_mem_field.empty())
     {
       out << "variable \"" << var.pretty_name << '"';
     }
     // dynamic variables
     else
     {
-      out << '"' << var.dyn_mem_field << "\" field of \"" << var.pretty_name 
-          << "\" allocated at line " << var.dyn_alloc_loc << ';';
+      out << '"' << var.dyn_mem_field << "\" field of \"" << var.pretty_name
+          << "\" allocated at line " << var.dyn_alloc_line << ';';
     }
 
-    out << " at the end of the loop; starting at line " << var.loophead_loc 
+    out << " at the end of the loop; starting at line " << var.loophead_line
         << std::endl;
   }
 }
-
-/*******************************************************************\
-
-Function: threeval2string
-
-  Inputs:
-
- Outputs:
-
- Purpose:
-
-\*******************************************************************/
 
 std::string threeval2string(threevalt v)
 {

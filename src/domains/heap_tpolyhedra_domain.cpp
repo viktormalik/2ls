@@ -120,39 +120,32 @@ void heap_tpolyhedra_domaint::set_smt_values(
 {
 }
 
-/*******************************************************************\
-
-Function: heap_tpolyhedra_domaint::identify_invariant_imprecision
-
-  Inputs: TODO
-
- Outputs: TODO
-
- Purpose: TODO
-
-\*******************************************************************/
-std::vector<std::string> heap_tpolyhedra_domaint::identify_invariant_imprecision(
+/// Identify imprecise template variables inside invariant
+/// \return Vector of imprecise SSA variable names
+std::vector<std::string>
+  heap_tpolyhedra_domaint::identify_invariant_imprecision(
   const domaint::valuet &value)
 {
   const heap_tpolyhedra_valuet &v=
     static_cast<const heap_tpolyhedra_valuet &>(value);
 
-  // invariant identif imprecision for both 'sub-domains'
-  // heap domain variables
-  std::vector<std::string> ssa_vars=heap_domain.identify_invariant_imprecision(
-    v.heap_value);
+  // Identify imprecise variables for both 'sub-domains'
 
-  // tpolyhedra domain variables
+  //  Get heap domain imprecise template variables
+  std::vector<std::string> heap_vars=
+    heap_domain.identify_invariant_imprecision(v.heap_value);
+
+  //  Get tpolyhedra domain imprecise template variables
   std::vector<std::string> tpoly_vars=
     polyhedra_domain.identify_invariant_imprecision(v.tpolyhedra_value);
 
-  // concatenate vectors
-  ssa_vars.reserve(ssa_vars.size() + tpoly_vars.size());
-  ssa_vars.insert(
-    ssa_vars.end(),
+  //  Concatenate vectors of imprecise variables of both domain
+  heap_vars.reserve(heap_vars.size()+tpoly_vars.size());
+  heap_vars.insert(
+    heap_vars.end(),
     std::make_move_iterator(tpoly_vars.begin()),
-    std::make_move_iterator(tpoly_vars.end())
-  );
+    std::make_move_iterator(tpoly_vars.end()));
 
-  return ssa_vars;
+  return heap_vars;
 }
+

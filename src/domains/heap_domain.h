@@ -265,10 +265,8 @@ public:
     return templ.empty();
   }
 
-  // TODO --------------------------------------------------------
-  virtual std::vector<std::string> identify_invariant_imprecision(
-    const valuet &value) override;
-  // -------------------------------------------------------------
+  virtual std::vector<std::string>
+    identify_invariant_imprecision(const valuet &value) override;
 
 protected:
   templatet templ;

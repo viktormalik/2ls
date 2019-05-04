@@ -25,9 +25,7 @@ class ssa_analyzert:public messaget
 public:
   typedef strategy_solver_baset::constraintst constraintst;
   typedef strategy_solver_baset::var_listt var_listt;
-  // TODO ------------------------------------------
   typedef summaryt::imprecise_varst imprecise_varst;
-  // -----------------------------------------------
 
   ssa_analyzert():
     result(NULL),
@@ -56,19 +54,16 @@ public:
   inline unsigned get_number_of_solver_instances() { return solver_instances; }
   inline unsigned get_number_of_solver_calls() { return solver_calls; }
 
-  // TODO ---------------------------------------------
   void find_goto_instrs(
-    local_SSAt &SSA, 
-    std::vector<std::string> &ssa_vars);
+    local_SSAt &SSA,
+    const std::vector<std::string> &ssa_vars);
 
-  int get_name_loc(const std::string &name);
-  std::string get_pretty_name(const std::string &name);
+  std::string get_dynobj_name(const std::string &name);
 
-  int get_field_loc(const std::string &name);
-  std::string get_dynamic_field(const std::string &name);
+  int get_name_node_loc(const std::string &name);
 
-  imprecise_varst get_imprecise_vars() { return vars_summary; }
-  // --------------------------------------------------
+  const imprecise_varst &get_imprecise_vars() const
+    { return imprecise_vars_summary; }
 
 protected:
   domaint *domain; // template generator is responsible for the domain object
@@ -77,9 +72,8 @@ protected:
   // statistics
   unsigned solver_instances;
   unsigned solver_calls;
-  // TODO ---------------------
-  imprecise_varst vars_summary;
-  // --------------------------
+
+  imprecise_varst imprecise_vars_summary;
 };
 
 #endif

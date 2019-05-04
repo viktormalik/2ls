@@ -290,8 +290,6 @@ exprt tpolyhedra_domaint::to_pre_constraints(valuet &_value)
     static_cast<tpolyhedra_domaint::templ_valuet &>(_value);
   assert(value.size()==templ.size());
 
-//		(value[0].operands())[0].id_string() << "\"");
-
   exprt::operandst c;
   for(std::size_t row=0; row<templ.size(); ++row)
   {
@@ -857,105 +855,113 @@ void tpolyhedra_domaint::eliminate_sympaths(
   }
 }
 
-/*******************************************************************\
-
- Function: tpolyhedra_domaint::identify_invariant_imprecision
-
-   Inputs: Computed invariant
-
-  Outputs: Vector of imprecise SSA variable names
-
-  Purpose: Identify imprecise template variables inside invariant
-
-\*******************************************************************/
+/// Identify imprecise template variables inside invariant
+/// \return Vector of imprecise SSA variable names
 std::vector<std::string> tpolyhedra_domaint::identify_invariant_imprecision(
   const domaint::valuet &value)
 {
-  // get template row values
   const templ_valuet &templ_val=static_cast<const templ_valuet &>(value);
   assert(templ_val.size()==templ.size());
-
-  // indicates the first template row of a template row pair
-  bool first_row=true;
-  
-  // the first and the second template row values of a template row pair
-  row_valuet first_row_val, secnd_row_val;
-
-  std::string expr_name;
 
   // vector for saving ssa variable names
   std::vector<std::string> ssa_vars;
 
-  for (rowt row=0; row<templ.size(); row++)
+  // loop through template row pairs
+  for(rowt row=0; row<templ.size(); row+=2)
   {
-    exprt tmpl_expr=templ[row].expr;
+    // get the row values of the template row pair
+    row_valuet row_val_1st=templ_val[row];
+    row_valuet row_val_2nd=templ_val[row+1];
 
-    // save the name of the first row of the template row pair
-    if (first_row)
+    // imprecise when the 1st row is maximum value and
+    //  the 2nd row is minimum value of its corresponding type
+    if(is_row_value_max(row, row_val_1st) &&
+        is_row_value_min(row+1, row_val_2nd))
     {
-      first_row_val=get_row_value(row, templ_val);
-      expr_name=from_expr(domaint::ns, "", tmpl_expr);
-    }
-    else
-    {
-      secnd_row_val=get_row_value(row, templ_val);
+      const exprt &templ_expr=templ[row].expr;
 
-      // pair is max and min -> unbounded value
-      if (first_row_val==get_max_row_value(row-1) &&
-          is_row_value_min(row, secnd_row_val))
-      {
-        ssa_vars.push_back(expr_name);
-      }
+      // skip CPROVER variables i.e., have CPROVER prefix
+      if(!is_cprover_symbol(templ_expr))
+        ssa_vars.push_back(from_expr(domaint::ns, "", templ_expr));
     }
-    first_row=!first_row;
   }
+
   return ssa_vars;
 }
 
-/*******************************************************************\
+/// Evaluate whether a row value at row is a maximum value
+/// \param row: template row
+/// \param row_val: row value to be evaluated
+/// \return True if row has maximum value otherwise false
+bool tpolyhedra_domaint::is_row_value_max(
+  const rowt &row,
+  const row_valuet &row_val)
+{
+  const template_rowt &templ_row=templ[row];
 
- Function: tpolyhedra_domaint::is_row_value_min()
+  // float types
+  if(templ_row.expr.type().id()==ID_floatbv)
+  {
+    ieee_floatt row_valf(row_val);
+    ieee_floatt max_valf(to_floatbv_type(templ_row.expr.type()));
+    max_valf.make_fltmax();
 
-   Inputs: Template row, row value to be evaluated
+    // is greater than max (including infinity)
+    return row_valf>=max_valf;
+  }
+  else
+  {
+    // is maximum value of the row
+    return row_val==get_max_row_value(row);
+  }
+}
 
-  Outputs: True if is minimum otherwise false
-
-  Purpose: Evaluate whether a row value at row is a minimum value
-
-\*******************************************************************/
-
+/// Evaluate whether a row value at row is a minimum value
+/// \param row: template row
+/// \param row_val: row value to be evaluated
+/// \return True if row has minimum value otherwise false
 bool tpolyhedra_domaint::is_row_value_min(
   const rowt &row,
   const row_valuet &row_val)
 {
-  assert(row>0);
   const template_rowt &templ_row=templ[row];
 
+  // signed numeric type
   if(templ_row.expr.type().id()==ID_signedbv)
   {
     mp_integer int_row_val;
 
-    // is true on conversion error
-    if (to_integer(row_val, int_row_val))
+    // try converting the row value to mp_integer
+    if(to_integer(row_val, int_row_val))
       return false;
 
-    // the first row of the pair was unsigned -> minimum is 0
-    if (templ[row-1].expr.type().id()==ID_unsignedbv)
-      return int_row_val == 0;
+    // the first row of the pair was unsigned, check if is minimum (is zero)
+    if(templ[row-1].expr.type().id()==ID_unsignedbv)
+      return int_row_val==0;
 
-    return (-(int_row_val << 1) == to_signedbv_type(
-      templ_row.expr.type()).smallest()
-    );
+    // check if the signed row value is the minimum of its signed type
+    //  due to implementation details, the row value must be shifted
+    //  to get its comparable negative value
+    return -(int_row_val << 1)==
+      to_signedbv_type(templ_row.expr.type()).smallest();
   }
+  // unsigned numeric type
   if(templ_row.expr.type().id()==ID_unsignedbv)
   {
-    return row_val==to_unsignedbv_type(templ_row.expr.type()).smallest_expr();
+    return row_val==
+      to_unsignedbv_type(templ_row.expr.type()).smallest_expr();
   }
+  // float type
   if(templ_row.expr.type().id()==ID_floatbv)
   {
-    ieee_floatt min(to_floatbv_type(templ_row.expr.type()));
-    min.make_fltmin();
-    return row_val==min.to_expr();
+    ieee_floatt row_valf(row_val);
+    ieee_floatt max_valf(to_floatbv_type(templ_row.expr.type()));
+    max_valf.make_fltmax();
+
+    // -row_valf is greater than max (including infinity)
+    return row_valf>=max_valf;
   }
-  assert(false); // type not supported
+
+  return false;
 }
+

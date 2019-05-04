@@ -19,6 +19,8 @@ Author: Peter Schrammel
 #include <langapi/language_util.h>
 #include <iostream>
 
+#define DYN_PREFIX_LEN 15
+
 void extend_expr_types(exprt &expr);
 constant_exprt simplify_const(const exprt &expr);
 ieee_floatt simplify_const_float(const exprt &expr);
@@ -37,11 +39,16 @@ constant_exprt make_one(const typet &type);
 constant_exprt make_minusone(const typet &type);
 
 irep_idt get_original_name(const symbol_exprt &);
+std::string get_original_name(const std::string &s);
 void clean_expr(exprt &expr);
 
 bool is_cprover_symbol(const exprt &expr);
 
 int get_dynobj_line(const irep_idt &id);
 int get_dynobj_instance(const irep_idt &id);
+
+bool is_dynamic_name(const std::string &name);
+int is_loopback_var(const std::string &name);
+std::string get_dynamic_field(const std::string &name);
 
 #endif
