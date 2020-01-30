@@ -252,6 +252,7 @@ Function: show_ssa
 void show_ssa(
   const goto_functionst::goto_functiont &goto_function,
   const ssa_heap_analysist &heap_analysis,
+  const dynamic_objectst &dynamic_objects,
   bool simplify,
   const namespacet &ns,
   std::ostream &out)
@@ -259,7 +260,8 @@ void show_ssa(
   if(!goto_function.body_available())
     return;
 
-  unwindable_local_SSAt local_SSA(goto_function, ns, heap_analysis);
+  unwindable_local_SSAt local_SSA(
+    goto_function, ns, heap_analysis, dynamic_objects);
   if(simplify)
     ::simplify(local_SSA, ns);
   local_SSA.output_verbose(out);
@@ -280,6 +282,7 @@ Function: show_ssa
 void show_ssa(
   const goto_modelt &goto_model,
   const ssa_heap_analysist &heap_analysis,
+  const dynamic_objectst &dynamic_objects,
   const irep_idt &function,
   bool simplify,
   std::ostream &out,
@@ -295,7 +298,7 @@ void show_ssa(
     if(f_it==goto_model.goto_functions.function_map.end())
       out << "function " << function << " not found\n";
     else
-      show_ssa(f_it->second, heap_analysis, simplify, ns, out);
+      show_ssa(f_it->second, heap_analysis, dynamic_objects, simplify, ns, out);
   }
   else
   {
@@ -308,7 +311,7 @@ void show_ssa(
 
       out << ">>>> Function " << f_it->first << "\n";
 
-      show_ssa(f_it->second, heap_analysis, simplify, ns, out);
+      show_ssa(f_it->second, heap_analysis, dynamic_objects, simplify, ns, out);
 
       out << "\n";
     }

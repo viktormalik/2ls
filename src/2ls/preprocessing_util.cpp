@@ -754,12 +754,24 @@ void twols_parse_optionst::split_dynamic_objects(
             unsigned inst_count=do_inst.calc_num_instances(
               f_it->second.body, &dynamic_object);
 
+            assert(inst_count < 6);
             dynamic_object.drop_last_instance();
-            for(unsigned i=0; i<inst_count; ++i)
-            {
-              dynamic_object.create_instance(
-                goto_model.symbol_table, "#"+std::to_string(i), false, true);
-            }
+
+            dynamic_object.create_instance(
+              goto_model.symbol_table, "#0", true, false);
+            dynamic_object.create_instance(
+              goto_model.symbol_table, "#1", false, true);
+            dynamic_object.create_instance(
+              goto_model.symbol_table, "#2", true, false);
+            dynamic_object.create_instance(
+              goto_model.symbol_table, "#3", false, true);
+            dynamic_object.create_instance(
+              goto_model.symbol_table, "#4", true, false);
+
+            dynamic_object.compute_guards_concrete(goto_model.symbol_table);
+            dynamic_object.enforce_order(goto_model.symbol_table);
+
+            std::cerr << from_expr(ns, "", dynamic_object.get_expr());
             assign.rhs()=dynamic_object.get_expr();
           }
         }

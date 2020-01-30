@@ -1,6 +1,7 @@
 SRC = tpolyhedra_domain.cpp equality_domain.cpp domain.cpp \
   predabs_domain.cpp heap_domain.cpp list_iterator.cpp \
   heap_tpolyhedra_domain.cpp heap_tpolyhedra_sympath_domain.cpp \
+  eq_heap_seq_domain.cpp \
   symbolic_path.cpp\
   ssa_analyzer.cpp util.cpp incremental_solver.cpp \
   strategy_solver_base.cpp strategy_solver_equality.cpp \
@@ -13,6 +14,7 @@ SRC = tpolyhedra_domain.cpp equality_domain.cpp domain.cpp \
   strategy_solver_predabs.cpp strategy_solver_heap.cpp \
   strategy_solver_heap_tpolyhedra.cpp \
   strategy_solver_heap_tpolyhedra_sympath.cpp \
+  strategy_solver_eq_heap_seq.cpp
 #solver_enumeration.cpp
 
 include ../config.inc

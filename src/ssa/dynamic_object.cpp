@@ -207,8 +207,8 @@ dynamic_objectt::dynamic_objectt(
   type(determine_malloc_type(malloc_call.op0(), symbol_table)),
   malloc_type(malloc_call.type())
 {
-  if(!is_concrete && alloc_concrete)
-    create_instance(symbol_table, "$co", true, false);
+//  if(!is_concrete && alloc_concrete)
+//    create_instance(symbol_table, "$co", true, false);
 
   create_instance(symbol_table, "", is_concrete, false);
 }
@@ -263,12 +263,10 @@ void dynamic_objectt::create_instance(
     address_of_object.type()=pointer_typet(symbol.type);
   }
 
-  exprt guard=create_instance_guard(
-    address_of_object, symbol_table, inst_suffix, concrete, nondet);
+  exprt guard=create_instance_guard(symbol_table, inst_suffix, nondet);
+  symbol_exprt guard_symbol=create_instance_cond(symbol_table, inst_suffix);
   symbol_exprt instance=symbol.symbol_expr();
-  if(concrete)
-    instance.set("#concrete", true);
-  instances.emplace_back(guard, instance);
+  instances.emplace_back(guard, guard_symbol, inst_suffix, instance, concrete, this);
 }
 
 /*******************************************************************\
@@ -288,13 +286,10 @@ Function: dynamic_object::create_instance_guard
 
 \*******************************************************************/
 exprt dynamic_objectt::create_instance_guard(
-  exprt &instance_address,
   symbol_tablet &symbol_table,
   std::string inst_suffix,
-  bool concrete,
   bool nondet)
 {
-  exprt guard=true_exprt();
   if(nondet)
   {
     // Fresh free boolean symbol (non-determinism)
@@ -306,24 +301,9 @@ exprt dynamic_objectt::create_instance_guard(
     nondet_symbol.mode=ID_C;
     symbol_table.add(nondet_symbol);
 
-    guard=nondet_symbol.symbol_expr();
+    return nondet_symbol.symbol_expr();
   }
-
-  if(concrete)
-  {
-    auto pointers=collect_pointer_vars(symbol_table, type);
-    exprt::operandst pointer_equs;
-    for(auto &ptr : pointers)
-    {
-      pointer_equs.push_back(equal_exprt(ptr, instance_address));
-    }
-    guard=and_exprt(
-      guard,
-      not_exprt(disjunction(pointer_equs)));
-  }
-
-  simplify_expr(guard, namespacet(symbol_table));
-  return guard;
+  return true_exprt();
 }
 
 /*******************************************************************\
@@ -340,7 +320,7 @@ Function: dynamic_object::is_abstract
 \*******************************************************************/
 bool dynamic_objectt::is_abstract() const
 {
-  return instances.size()>1 || !instances[0].second.get_bool("#concrete");
+  return instances.size()>1 || !instances[0].concrete;
 }
 
 /*******************************************************************\
@@ -361,16 +341,16 @@ exprt dynamic_objectt::get_expr() const
   assert(!instances.empty());
   auto inst_it=instances.rbegin();
 
-  exprt expr=address_of_exprt(inst_it->second);
+  exprt expr=address_of_exprt(inst_it->symbol);
   if(expr.type()!=malloc_type)
     expr=typecast_exprt(expr, malloc_type);
 
   while(++inst_it!=instances.rend())
   {
-    exprt obj=address_of_exprt(inst_it->second);
+    exprt obj=address_of_exprt(inst_it->symbol);
     if(obj.type()!=malloc_type)
       obj=typecast_exprt(obj, malloc_type);
-    expr=if_exprt(inst_it->first, obj, expr);
+    expr=if_exprt(inst_it->guard_symbol, obj, expr);
   }
   expr.set("#malloc_result", true);
   return expr;
@@ -397,6 +377,136 @@ Function: dynamic_objects::drop_last_instance
 void dynamic_objectt::drop_last_instance()
 {
   instances.pop_back();
+}
+
+exprt dynamic_objectt::exclude_instances_guard(
+  symbol_tablet &symbol_table,
+  const std::vector<const symbol_exprt *> &inst_to_exclude)
+{
+  exprt::operandst instance_equs;
+  for (auto *inst : inst_to_exclude)
+  {
+    auto addr=address_of_exprt(*inst);
+    auto pointers=collect_pointer_vars(symbol_table, type);
+    for(auto &p : pointers)
+    {
+      instance_equs.push_back(equal_exprt(p, addr));
+    }
+  }
+  if(instance_equs.empty())
+    return true_exprt();
+  return not_exprt(disjunction(instance_equs));
+}
+
+exprt dynamic_objectt::include_instances_guard(
+  symbol_tablet &symbol_table,
+  const std::vector<const symbol_exprt *> &inst_to_include)
+{
+  symbolt &malloc_obj = symbol_table.lookup("__CPROVER_malloc_object");
+  exprt::operandst instance_equs;
+  for(auto *inst : inst_to_include)
+  {
+    instance_equs.push_back(
+      equal_exprt(
+        malloc_obj.symbol_expr(),
+        typecast_exprt(address_of_exprt(*inst), malloc_obj.type)));
+  }
+
+  if(instance_equs.empty())
+    return true_exprt();
+  return disjunction(instance_equs);
+}
+
+const exprt dynamic_objectt::include_instance_guard(
+  const symbol_tablet &symbol_table,
+  const symbol_exprt &instance) const
+{
+  exprt::operandst equs;
+  auto addr = address_of_exprt(instance);
+  auto pointers=collect_pointer_vars(symbol_table, type);
+  for (auto &p : pointers) {
+    equs.push_back(equal_exprt(p, addr));
+  }
+  return disjunction(equs);
+}
+
+void dynamic_objectt::compute_guards_concrete(symbol_tablet &symbol_table)
+{
+  for (auto &inst : instances)
+  {
+    if (inst.concrete)
+    {
+      std::vector<const symbol_exprt *> v = {&inst.symbol};
+      inst.guard=and_exprt(
+        inst.guard,
+        exclude_instances_guard(symbol_table, v));
+    }
+//    simplify_expr(inst.first, namespacet(symbol_table));
+  }
+}
+
+void dynamic_objectt::enforce_order(symbol_tablet &symbol_table)
+{
+  for(auto inst_it=instances.begin(); inst_it!=instances.end(); inst_it++)
+  {
+//    std::cerr << id2string(inst_it->symbol.get_identifier()) << ":\n";
+    std::vector<const symbol_exprt *> pred_instances;
+    std::vector<const symbol_exprt *> succ_instances;
+
+    auto other_inst_it = inst_it;
+    if (!inst_it->concrete)
+      pred_instances.push_back(&other_inst_it->symbol);
+
+    if (other_inst_it != instances.begin())
+    {
+      do
+      {
+        other_inst_it--;
+        pred_instances.push_back(&other_inst_it->symbol);
+      } while(other_inst_it!=instances.begin() && !other_inst_it->concrete);
+    }
+
+    other_inst_it = inst_it;
+    other_inst_it++;
+    while(other_inst_it!=instances.end())
+    {
+      succ_instances.push_back(&other_inst_it->symbol);
+      ++other_inst_it;
+    }
+
+    inst_it->guard=and_exprt(
+      inst_it->guard,
+      include_instances_guard(symbol_table, pred_instances));
+
+    inst_it->guard=and_exprt(
+      inst_it->guard,
+      exclude_instances_guard(symbol_table, succ_instances));
+  }
+}
+
+const dynamic_objectt::instancet *
+dynamic_objectt::get_instance(const symbol_exprt &symbol) const
+{
+  std::string suffix =get_dynobj_instance_suffix(symbol.get_identifier());
+  for (const auto &inst : instances)
+    if (inst.suffix == suffix)
+      return &inst;
+  return nullptr;
+}
+
+symbol_exprt dynamic_objectt::create_instance_cond(
+  symbol_tablet &symbol_table,
+  std::string &inst_suffix)
+{
+  // Fresh free boolean symbol (non-determinism)
+  symbolt cond_symbol;
+  cond_symbol.base_name="$cond#os"+std::to_string(loc)+inst_suffix;
+  cond_symbol.name=cond_symbol.base_name;
+  cond_symbol.is_lvalue=true;
+  cond_symbol.type=bool_typet();
+  cond_symbol.mode=ID_C;
+  symbol_table.add(cond_symbol);
+  return cond_symbol.symbol_expr();
 }
 
 /*******************************************************************\
@@ -693,4 +803,23 @@ int get_dynobj_line(const irep_idt &id)
   size_t end=name.find_first_not_of("0123456789", pos);
   std::string number=name.substr(start, end-start);
   return std::stoi(number);
+}
+
+std::string get_dynobj_instance_suffix(const irep_idt &id)
+{
+  std::string name=id2string(id);
+  size_t pos=name.find("dynamic_object$");
+  if(pos==std::string::npos)
+    return "";
+  pos=name.find_first_of("#", pos);
+  if(pos==std::string::npos)
+    return "";
+  size_t end=name.find_first_not_of("0123456789", pos+1);
+  return name.substr(pos, end-pos);
+}
+
+const exprt dynamic_objectt::instancet::select_guard() const
+{
+  return symbol_exprt("guard#is" + std::to_string(dynobj->loc) + suffix,
+                      bool_typet());
 }

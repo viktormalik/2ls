@@ -197,7 +197,7 @@ void twols_parse_optionst::get_command_line_options(optionst &options)
   else if(cmdline.isset("equalities"))
   {
     options.set_option("equalities", true);
-    options.set_option("std-invariants", true);
+//    options.set_option("std-invariants", true);
   }
   else if(cmdline.isset("heap"))
   {
@@ -221,6 +221,10 @@ void twols_parse_optionst::get_command_line_options(optionst &options)
     options.set_option("heap-interval", true);
     if(cmdline.isset("sympath"))
       options.set_option("sympath", true);
+  }
+  else if (cmdline.isset("eq-heap"))
+  {
+    options.set_option("eq-heap", true);
   }
   else
   {
@@ -435,11 +439,7 @@ int twols_parse_optionst::doit()
     bool simplify=!cmdline.isset("no-simplify");
     irep_idt function=cmdline.get_value("function");
     show_ssa(
-      goto_model,
-      heap_analysis,
-      function,
-      simplify,
-      std::cout,
+      goto_model, heap_analysis, dynamic_objects, function, simplify, std::cout,
       ui_message_handler);
     return 7;
   }
@@ -533,6 +533,8 @@ int twols_parse_optionst::doit()
     status() << "Using heap domain with interval domain for values" << eom;
   else if(options.get_bool_option("heap-zones"))
     status() << "Using heap domain with zones domain for values" << eom;
+  else if(options.get_bool_option("eq-heap"))
+    status() << "Using equality domain and then heap domain" << eom;
   else
   {
     if(options.get_bool_option("intervals"))
@@ -582,18 +584,18 @@ int twols_parse_optionst::doit()
     if(!options.get_bool_option("k-induction") &&
        !options.get_bool_option("incremental-bmc"))
       checker=std::unique_ptr<summary_checker_baset>(
-        new summary_checker_ait(options, heap_analysis));
+        new summary_checker_ait(options, heap_analysis, dynamic_objects));
     if(options.get_bool_option("k-induction") &&
        !options.get_bool_option("incremental-bmc"))
       checker=std::unique_ptr<summary_checker_baset>(
-        new summary_checker_kindt(options, heap_analysis));
+        new summary_checker_kindt(options, heap_analysis, dynamic_objects));
     if(!options.get_bool_option("k-induction") &&
        options.get_bool_option("incremental-bmc"))
       checker=std::unique_ptr<summary_checker_baset>(
-        new summary_checker_bmct(options, heap_analysis));
+        new summary_checker_bmct(options, heap_analysis, dynamic_objects));
     if(options.get_bool_option("nontermination"))
       checker=std::unique_ptr<summary_checker_baset>(
-        new summary_checker_nontermt(options, heap_analysis));
+        new summary_checker_nontermt(options, heap_analysis, dynamic_objects));
 
     checker->set_message_handler(get_message_handler());
     checker->simplify=!cmdline.isset("no-simplify");
@@ -1247,9 +1249,11 @@ bool twols_parse_optionst::process_goto_program(
     goto_model.goto_functions.compute_loop_numbers();
 
     // Replace mallocs by dynamic objects
-    auto dynamic_objects=collect_dynamic_objects(
-      goto_model, options.get_bool_option("pointer-check"));
+    dynamic_objects=collect_dynamic_objects(
+      goto_model,
+      options.get_bool_option("pointer-check"));
     dynamic_memory_detected=dynamic_objects.have_abstract();
+    allow_record_malloc(goto_model);
 
     // Allow recording of mallocs and memory leaks
     if(options.get_bool_option("pointer-check"))

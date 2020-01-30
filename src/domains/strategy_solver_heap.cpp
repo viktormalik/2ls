@@ -116,8 +116,11 @@ bool strategy_solver_heapt::iterate(invariantt &_inv)
 
         const heap_domaint::template_rowt &templ_row=heap_domain.templ[row];
 
-        const exprt loop_guard=to_and_expr(
-          heap_domain.templ[row].pre_guard).op1();
+        const and_exprt pre_guard=to_and_expr(heap_domain.templ[row].pre_guard);
+        const exprt loop_guard=
+          pre_guard.op0().id()==ID_and ? to_and_expr(pre_guard.op0()).op1()
+                                       : pre_guard.op1();
+        debug() << "loop guard: " << from_expr(ns, "", loop_guard) << eom;
         find_symbolic_path(loop_guards, loop_guard);
 
         if(templ_row.expr.id()==ID_and)

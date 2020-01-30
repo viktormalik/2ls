@@ -1584,7 +1584,8 @@ void heap_domaint::restrict_to_sympath(const symbolic_patht &sympath)
 {
   for(auto &row : templ)
   {
-    const exprt c=sympath.get_expr(row.pre_guard.op1());
+    const exprt &row_ls_guard = row.pre_guard.op0().id() == ID_and ? row.pre_guard.op0().op1() : row.pre_guard.op1();
+    const exprt c=sympath.get_expr(row_ls_guard);
     row.aux_expr=and_exprt(row.aux_expr, c);
   }
 }
@@ -1625,7 +1626,8 @@ void heap_domaint::eliminate_sympaths(
     exprt::operandst paths;
     for(auto &sympath : sympaths)
     {
-      const exprt path_expr=sympath.get_expr(row.pre_guard.op1());
+      const exprt &row_ls_guard = row.pre_guard.op0().id() == ID_and ? row.pre_guard.op0().op1() : row.pre_guard.op1();
+      const exprt path_expr=sympath.get_expr(row_ls_guard);
       paths.push_back(path_expr);
     }
     row.aux_expr=paths.empty()

@@ -6,6 +6,8 @@ Author: Peter Schrammel
 
 \*******************************************************************/
 
+#define DEBUG
+
 #ifdef DEBUG
 #include <iostream>
 #endif
@@ -44,7 +46,7 @@ bool strategy_solver_equalityt::iterate(invariantt &_inv)
 
     solver << literal_exprt(cond_literal);
 
-#if 0
+#ifdef DEBUG
     debug() << "Checking equality " << eom;
     debug() << "Pre: " << from_expr(ns, "", pre_expr) << eom;
     debug() << "Post: " << from_expr(ns, "", post_expr) << eom;
@@ -52,7 +54,7 @@ bool strategy_solver_equalityt::iterate(invariantt &_inv)
 
     if(solver()==decision_proceduret::D_SATISFIABLE)
     {
-#if 0
+#ifdef DEBUG
       debug() << "SAT" << eom;
 #endif
       todo_disequs.insert(*e_it);
@@ -61,7 +63,7 @@ bool strategy_solver_equalityt::iterate(invariantt &_inv)
     }
     else  // equality holds
     {
-#if 0
+#ifdef DEBUG
       debug() << "UNSAT" << eom;
 #endif
 
@@ -96,7 +98,7 @@ bool strategy_solver_equalityt::iterate(invariantt &_inv)
 
     solver << literal_exprt(cond_literal);
 
-#if 0
+#ifdef DEBUG
     debug() << "Checking disequality " << eom;
     debug() << "Pre: " << from_expr(ns, "", pre_expr) << eom;
     debug() << "Post: " << from_expr(ns, "", post_expr) << eom;
@@ -104,13 +106,13 @@ bool strategy_solver_equalityt::iterate(invariantt &_inv)
 
     if(solver()==decision_proceduret::D_SATISFIABLE)
     {
-#if 0
+#ifdef DEBUG
       debug() << "SAT" << eom;
 #endif
     }
     else  // equality holds
     {
-#if 0
+#ifdef DEBUG
       debug() << "UNSAT" << eom;
 #endif
       equality_domain.set_disequal(*e_it, inv);

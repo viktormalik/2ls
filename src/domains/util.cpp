@@ -725,3 +725,10 @@ int get_dynobj_instance(const irep_idt &id)
   std::string number=name.substr(start, end-start);
   return std::stoi(number);
 }
+
+irep_idt get_ssa_suffix(const symbol_exprt &symbol_expr)
+{
+  std::string s=id2string(symbol_expr.get_identifier());
+  std::size_t pos1=s.find_last_of("#");
+  return s.substr(pos1+1);
+}

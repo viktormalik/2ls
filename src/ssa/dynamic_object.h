@@ -39,6 +39,34 @@ public:
   dynamic_objectt(dynamic_objectt &&)=default;
   dynamic_objectt &operator=(dynamic_objectt &&)=default;
 
+  struct instancet
+  {
+    exprt guard;
+    symbol_exprt guard_symbol;
+    std::string suffix;
+    symbol_exprt symbol;
+    bool concrete;
+
+    instancet(
+      const exprt &guard,
+      const symbol_exprt &guard_symbol,
+      const std::string &suffix,
+      symbol_exprt &symbol,
+      const bool concrete,
+      dynamic_objectt *dynobj):
+      guard(guard), guard_symbol(guard_symbol), suffix(suffix), symbol(symbol), concrete(concrete),
+      dynobj(dynobj)
+    {
+      if(concrete)
+        symbol.set("#concrete", true);
+    }
+
+    const exprt select_guard() const;
+
+  private:
+    dynamic_objectt *dynobj;
+  };
+
   void create_instance(
     symbol_tablet &symbol_table,
     std::string inst_suffix,
@@ -46,23 +74,42 @@ public:
     bool nondet);
 
   void drop_last_instance();
+  const instancet *get_instance(const symbol_exprt &symbol) const;
+
+  const exprt include_instance_guard(
+    const symbol_tablet &symbol_table,
+    const symbol_exprt &instance) const;
+
+  void compute_guards_concrete(symbol_tablet &symbol_table);
+  void enforce_order(symbol_tablet &symbol_table);
 
   bool is_abstract() const;
   exprt get_expr() const;
   std::string get_name() const;
 
+  std::vector<instancet> instances;
+
 protected:
   unsigned loc;
   typet type;
-  std::vector<std::pair<exprt, symbol_exprt>> instances;
   typet malloc_type;
 
+  symbol_exprt create_instance_cond(
+    symbol_tablet &symbol_table,
+    std::string &inst_suffix
+  );
+
   exprt create_instance_guard(
-    exprt &instance_address,
     symbol_tablet &symbol_table,
     std::string inst_suffix,
-    bool concrete,
     bool nondet);
+
+  exprt exclude_instances_guard(
+    symbol_tablet &symbol_table,
+    const std::vector<const symbol_exprt *> &inst_to_exclude);
+  exprt include_instances_guard(
+    symbol_tablet &symbol_table,
+    const std::vector<const symbol_exprt *> &inst_to_include);
 };
 
 /*******************************************************************\
@@ -92,5 +139,6 @@ dynamic_objectst collect_dynamic_objects(
   bool alloc_concrete);
 
 int get_dynobj_line(const irep_idt &id);
+std::string get_dynobj_instance_suffix(const irep_idt &id);
 
 #endif // CPROVER_2LS_SSA_DYNAMIC_OBJECT_H

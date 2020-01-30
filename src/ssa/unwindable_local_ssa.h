@@ -13,16 +13,18 @@ Author: Peter Schrammel, Saurabh Joshi
 
 #include "local_ssa.h"
 #include "ssa_heap_domain.h"
+#include "dynamic_object.h"
 
 class unwindable_local_SSAt:public local_SSAt
 {
 public:
   unwindable_local_SSAt(
-    const goto_functiont &_goto_function,
-    const namespacet &_ns,
-    const ssa_heap_analysist &heap_analysis,
-    const std::string &_suffix=""):
-    local_SSAt(_goto_function, _ns, heap_analysis, _suffix),
+      const goto_functiont &_goto_function,
+      const namespacet &_ns,
+      const ssa_heap_analysist &heap_analysis,
+      const dynamic_objectst &dynamic_objects,
+      const std::string &_suffix=""):
+    local_SSAt(_goto_function, _ns, heap_analysis, dynamic_objects, _suffix),
     current_unwinding(-1)
   {
     compute_loop_hierarchy();

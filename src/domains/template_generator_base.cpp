@@ -21,6 +21,7 @@ Author: Peter Schrammel
 #include "heap_domain.h"
 #include "heap_tpolyhedra_domain.h"
 #include "heap_tpolyhedra_sympath_domain.h"
+#include "eq_heap_seq_domain.h"
 
 #ifdef DEBUG
 #include <iostream>
@@ -177,6 +178,7 @@ void template_generator_baset::collect_variables_loop(
         if(p_it==phi_nodes.end()) // object not modified in this loop
           continue;
 
+        exprt obj_pre_guard=pre_guard;
         exprt obj_post_guard=post_guard;
 
         if(id.find("__CPROVER_deallocated")!=std::string::npos)
@@ -204,11 +206,15 @@ void template_generator_baset::collect_variables_loop(
           symbol_exprt unallocated(orig_id, post_var.type());
           exprt guard=not_exprt(equal_exprt(post_var, unallocated));
           obj_post_guard=and_exprt(obj_post_guard, guard);
+
+          auto &dynobj = SSA.dynamic_objects.get(o_it->symbol_expr());
+          const auto &dynobj_inst = dynobj.get_instance(o_it->symbol_expr());
+          obj_pre_guard = and_exprt(obj_pre_guard, dynobj_inst->select_guard());
         }
 
         exprt init_expr;
         get_init_expr(SSA, o_it, n_it, init_expr);
-        add_var(pre_var, pre_guard, obj_post_guard, domaint::LOOP, var_specs);
+        add_var(pre_var, obj_pre_guard, obj_post_guard, domaint::LOOP, var_specs);
 
 #ifdef DEBUG
         std::cout << "Adding " << from_expr(ns, "", in) << " " <<
@@ -807,6 +813,10 @@ void template_generator_baset::instantiate_standard_domains(
     else
       domain_ptr=new heap_tpolyhedra_domaint(
         domain_number, renaming_map, var_specs, SSA.ns, polyhedra_kind);
+  } else if (options.get_bool_option("eq-heap"))
+  {
+    filter_heap_interval_domain();
+    domain_ptr=new eq_heap_seq_domaint(domain_number, renaming_map, var_specs, SSA);
   }
 }
 

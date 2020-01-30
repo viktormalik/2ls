@@ -24,6 +24,7 @@ class ssa_heap_analysist;
 void show_ssa(
   const goto_modelt &,
   const ssa_heap_analysist &,
+  const dynamic_objectst &dynamic_objects,
   const irep_idt &function,
   bool simplify,
   std::ostream &,

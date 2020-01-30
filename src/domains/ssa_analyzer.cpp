@@ -34,6 +34,7 @@ Author: Peter Schrammel
 #include "strategy_solver_heap.h"
 #include "strategy_solver_heap_tpolyhedra.h"
 #include "strategy_solver_heap_tpolyhedra_sympath.h"
+#include "strategy_solver_eq_heap_seq.h"
 
 // NOLINTNEXTLINE(*)
 #define BINSEARCH_SOLVER strategy_solver_binsearcht(\
@@ -119,6 +120,18 @@ void ssa_analyzert::operator()(
       get_message_handler(),
       template_generator);
     result=new heap_domaint::heap_valuet();
+  }
+  else if (template_generator.options.get_bool_option("eq-heap"))
+  {
+    strategy_solver=new strategy_solver_eq_heap_seqt(
+      *static_cast<eq_heap_seq_domaint *>(domain),
+      solver,
+      SSA,
+      precondition,
+      get_message_handler(),
+      template_generator
+    );
+    result = new eq_heap_seq_domaint::eq_heap_seq_valuet();
   }
   else if(template_generator.options.get_bool_option("heap-interval")
           || template_generator.options.get_bool_option("heap-zones"))

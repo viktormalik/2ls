@@ -15,9 +15,10 @@ class summary_checker_ait:public summary_checker_baset
 {
 public:
   inline summary_checker_ait(
-    optionst &_options,
-    const ssa_heap_analysist &heap_analysis):
-    summary_checker_baset(_options, heap_analysis)
+      optionst &_options,
+      const ssa_heap_analysist &heap_analysis,
+      const dynamic_objectst &dynamic_objects):
+    summary_checker_baset(_options, heap_analysis, dynamic_objects)
   {
   }
 

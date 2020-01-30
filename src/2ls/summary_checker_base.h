@@ -20,6 +20,7 @@ Author: Peter Schrammel
 #include <domains/incremental_solver.h>
 #include <ssa/ssa_db.h>
 #include <solver/summary_db.h>
+#include <ssa/dynamic_object.h>
 
 #include "cover_goals_ext.h"
 
@@ -29,8 +30,9 @@ class summary_checker_baset:public property_checkert
 {
 public:
   summary_checker_baset(
-    optionst &_options,
-    const ssa_heap_analysist &_heap_analysis):
+      optionst &_options,
+      const ssa_heap_analysist &_heap_analysis,
+      const dynamic_objectst &dynamic_objects):
     show_vcc(false),
     simplify(false),
     fixed_point(false),
@@ -39,6 +41,7 @@ public:
     ssa_unwinder(ssa_db),
     ssa_inliner(summary_db),
     heap_analysis(_heap_analysis),
+    dynamic_objects(dynamic_objects),
     solver_instances(0),
     solver_calls(0),
     summaries_used(0),
@@ -67,6 +70,7 @@ protected:
   ssa_inlinert ssa_inliner;
 
   const ssa_heap_analysist &heap_analysis;
+  const dynamic_objectst &dynamic_objects;
 
   unsigned solver_instances;
   unsigned solver_calls;
@@ -82,7 +86,8 @@ protected:
   void SSA_functions(
     const goto_modelt &,
     const namespacet &ns,
-    const ssa_heap_analysist &heap_analysis);
+    const ssa_heap_analysist &heap_analysis,
+    const dynamic_objectst &dynamic_objects);
 
   void summarize(
     const goto_modelt &,

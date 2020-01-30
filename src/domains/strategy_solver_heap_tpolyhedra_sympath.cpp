@@ -6,7 +6,7 @@ Author: Viktor Malik
 
 \*******************************************************************/
 
-// #define DEBUG
+ #define DEBUG
 
 #include "strategy_solver_heap_tpolyhedra_sympath.h"
 
@@ -44,6 +44,8 @@ bool strategy_solver_heap_tpolyhedra_sympatht::iterate(
   auto &inv=static_cast
     <heap_tpolyhedra_sympath_domaint::heap_tpolyhedra_sympath_valuet &>(_inv);
 
+  std::cerr << "Size: " << inv.size() << "\n";
+
   bool improved;
   if(!new_path)
   {
@@ -70,7 +72,13 @@ bool strategy_solver_heap_tpolyhedra_sympatht::iterate(
 
       // Check if the computed path is really feasible
       if(!is_current_path_feasible(inv))
+      {
+        std::cerr << "Path not feasible\n";
         inv.erase(sympath);
+      }
+
+      domain.heap_tpolyhedra_domain.output_value(
+        std::cerr, inv.at(sympath), ns);
 
       visited_paths.push_back(symbolic_path);
       domain.heap_tpolyhedra_domain.clear_aux_symbols();
@@ -109,7 +117,19 @@ bool strategy_solver_heap_tpolyhedra_sympatht::iterate(
       std::cerr << from_expr(ns, "", symbolic_path.get_expr()) << "\n";
 #endif
       const exprt sympath=heap_tpolyhedra_solver.symbolic_path.get_expr();
-      inv.emplace(sympath, std::move(new_value));
+      auto path_inv = inv.find(sympath);
+      if (path_inv == inv.end())
+      {
+        std::cerr << "Not existing path\n";
+        std::cerr << inv.empty() << "\n";
+        for (auto &path : inv) {
+          std::cerr << from_expr(ns, "", path.first) << "\n";
+        }
+        inv.emplace(sympath, std::move(new_value));
+      }
+      else {
+        std::cerr << "Need join\n";
+      }
       new_path=false;
     }
   }
@@ -177,6 +197,8 @@ bool strategy_solver_heap_tpolyhedra_sympatht::is_current_path_feasible(
     // Push states of other loop select gurads and condition of reachablility
     // of the current loop
     const exprt sympath_no_current=symbolic_path.get_expr(guard.first, true);
+    std::cerr << from_expr(ns, "", sympath_no_current) << "\n";
+    std::cerr << from_expr(ns, "", loop_cond) << "\n";
     solver << sympath_no_current;
     solver << loop_cond;
 
@@ -184,6 +206,10 @@ bool strategy_solver_heap_tpolyhedra_sympatht::is_current_path_feasible(
     // the path is infeasible
     if(solver()==decision_proceduret::D_UNSATISFIABLE)
       result=false;
+    else {
+      std::cerr << from_expr(ns, "", solver.get(sympath_no_current)) << "\n";
+      std::cerr << from_expr(ns, "", solver.get(loop_cond)) << "\n";
+    }
 
     solver.pop_context();
   }

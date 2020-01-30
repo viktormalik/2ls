@@ -21,6 +21,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "ssa_object.h"
 #include "ssa_heap_domain.h"
 #include "may_alias_analysis.h"
+#include "dynamic_object.h"
 
 #define TEMPLATE_PREFIX "__CPROVER_template"
 #define TEMPLATE_DECL TEMPLATE_PREFIX
@@ -34,12 +35,14 @@ public:
   typedef goto_programt::const_targett locationt;
 
   inline local_SSAt(
-    const goto_functiont &_goto_function,
-    const namespacet &_ns,
-    const ssa_heap_analysist &_heap_analysis,
-    const std::string &_suffix=""):
+      const goto_functiont &_goto_function,
+      const namespacet &_ns,
+      const ssa_heap_analysist &_heap_analysis,
+      const dynamic_objectst &_dynamic_objects,
+      const std::string &_suffix):
     ns(_ns), goto_function(_goto_function),
     heap_analysis(_heap_analysis),
+    dynamic_objects(_dynamic_objects),
     ssa_objects(_goto_function, ns, _heap_analysis),
     ssa_value_ai(_goto_function, ns, _heap_analysis),
     assignments(
@@ -232,6 +235,7 @@ public:
     const locationt loc);
 
   const ssa_heap_analysist &heap_analysis;
+  const dynamic_objectst &dynamic_objects;
 
   ssa_objectst ssa_objects;
   typedef ssa_objectst::objectst objectst;
@@ -284,6 +288,7 @@ protected:
   void build_function_call(locationt loc);
   void build_assertions(locationt loc);
   void build_unknown_objs(locationt loc);
+  void build_malloc(locationt loc);
 
   void collect_record_frees(locationt loc);
 

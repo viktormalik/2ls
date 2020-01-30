@@ -48,6 +48,7 @@ class optionst;
   "(heap-zones)" \
   "(heap-values-refine)" \
   "(sympath)" \
+  "(eq-heap)" \
   "(enum-solver)(binsearch-solver)(arrays)"\
   "(string-abstraction)(no-arch)(arch):(floatbv)(fixedbv)" \
   "(round-to-nearest)(round-to-plus-inf)(round-to-minus-inf)(round-to-zero)" \
@@ -87,6 +88,9 @@ protected:
   bool recursion_detected;
   bool threads_detected;
   bool dynamic_memory_detected;
+
+  dynamic_objectst dynamic_objects;
+
   virtual void register_languages();
 
   void get_command_line_options(optionst &options);

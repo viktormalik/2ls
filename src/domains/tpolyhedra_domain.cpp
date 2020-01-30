@@ -1045,11 +1045,11 @@ void tpolyhedra_domaint::add_difference_template(
         int v2_index=get_dynobj_line(to_symbol_expr(v2->var).get_identifier());
         if(v1_index>=0 && v2_index>=0 && v1_index==v2_index)
         {
-          int v1_inst=get_dynobj_instance(
+          std::string v1_inst=get_dynobj_instance_suffix(
             to_symbol_expr(v1->var).get_identifier());
-          int v2_inst=get_dynobj_instance(
+          std::string v2_inst=get_dynobj_instance_suffix(
             to_symbol_expr(v2->var).get_identifier());
-          if(v1_inst>=0 && v2_inst>=0 && v1_inst!=v2_inst)
+          if(v1_inst!="" && v2_inst!="" && v1_inst!=v2_inst)
             continue;
         }
       }
@@ -1177,7 +1177,8 @@ void tpolyhedra_domaint::restrict_to_sympath(const symbolic_patht &sympath)
 {
   for(auto &row : templ)
   {
-    const exprt c=sympath.get_expr(row.pre_guard.op1());
+    const exprt &row_ls_guard = row.pre_guard.op0().id() == ID_and ? row.pre_guard.op0().op1() : row.pre_guard.op1();
+    const exprt c=sympath.get_expr(row_ls_guard);
     row.aux_expr=and_exprt(row.aux_expr, c);
   }
 }
@@ -1207,7 +1208,8 @@ void tpolyhedra_domaint::eliminate_sympaths(
     exprt::operandst paths;
     for(const symbolic_patht &sympath : sympaths)
     {
-      const exprt path_expr=sympath.get_expr(row.pre_guard.op1());
+      const exprt &row_ls_guard = row.pre_guard.op0().id() == ID_and ? row.pre_guard.op0().op1() : row.pre_guard.op1();
+      const exprt path_expr=sympath.get_expr(row_ls_guard);
       paths.push_back(path_expr);
     }
     row.aux_expr=paths.empty()

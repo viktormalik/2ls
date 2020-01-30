@@ -18,6 +18,7 @@ Author: Peter Schrammel
 
 #include "equality_domain.h"
 #include "util.h"
+#include "domain.h"
 
 /*******************************************************************\
 
@@ -184,8 +185,16 @@ void equality_domaint::project_on_vars(
 #if 0
     std::cout << vv.second << std::endl;
 #endif
-    if(vars.find(vv.first)==vars.end() ||
-       (vars.find(vv.second)==vars.end() &&
+
+    vart vv1=vv.first;
+    if(vv1.id()==ID_typecast)
+      vv1=to_typecast_expr(vv1).op();
+    vart vv2=vv.second;
+    if(vv2.id()==ID_typecast)
+      vv2=to_typecast_expr(vv2).op();
+
+    if(vars.find(vv1)==vars.end() ||
+       (vars.find(vv2)==vars.end() &&
         !(vv.second.id()==ID_constant &&
           to_constant_expr(vv.second).get_value()=="NULL")))
       continue;
@@ -422,9 +431,20 @@ bool equality_domaint::adapt_types(exprt &v1, exprt &v2)
   // pointer equality
   if(v1.type().id()==ID_pointer && v2.type().id()==ID_pointer)
   {
-    if(to_pointer_type(v1.type()).subtype()==
-       to_pointer_type(v2.type()).subtype())
+    auto &v1_subtype = to_pointer_type(v1.type()).subtype();
+    auto &v2_subtype = to_pointer_type(v2.type()).subtype();
+    if(v1_subtype == v2_subtype)
       return true;
+    if (v1_subtype.id() == ID_empty)
+    {
+      v1=typecast_exprt(v1, v2.type());
+      return true;
+    }
+    if(v2_subtype.id()==ID_empty)
+    {
+      v2=typecast_exprt(v2, v1.type());
+      return true;
+    }
     return false;
   }
 
@@ -495,6 +515,15 @@ void equality_domaint::make_template(
 
       exprt vv1=v1->var;
       exprt vv2=v2->var;
+
+      auto v2id = id2string(to_symbol_expr(vv2).get_identifier());
+
+      if(v1->kind == LOOP && v2->kind == LOOP &&
+         vv1.id()==ID_symbol && vv2.id()==ID_symbol &&
+         get_ssa_suffix(to_symbol_expr(vv1))!=
+         get_ssa_suffix(to_symbol_expr(vv2)))
+        continue;
+
       if(!adapt_types(vv1, vv2))
         continue;
 

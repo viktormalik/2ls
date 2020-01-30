@@ -58,6 +58,7 @@ void local_SSAt::build_SSA()
     build_assertions(i_it);
     build_function_call(i_it);
 //    build_unknown_objs(i_it);
+    build_malloc(i_it);
     collect_record_frees(i_it);
   }
 
@@ -396,6 +397,15 @@ void local_SSAt::build_phi_nodes(locationt loc)
           std::make_pair(
             to_symbol_expr(incoming_select),
             to_symbol_expr(guard_symbol(loc))));
+
+        if(id2string(o_it->get_identifier()).find("dynamic_object$")!=
+           std::string::npos)
+        {
+          auto &dynobj = dynamic_objects.get(o_it->symbol_expr());
+          const auto *dynobj_inst = dynobj.get_instance(o_it->symbol_expr());
+          incoming_select=and_exprt(
+            incoming_select, dynobj_inst->select_guard());
+        }
 
         if(rhs.is_nil()) // first
           rhs=incoming_value;
@@ -2221,4 +2231,27 @@ bool local_SSAt::can_reuse_symderef(
   }
 
   return true;
+}
+
+void local_SSAt::build_malloc(local_SSAt::locationt loc)
+{
+  if (!loc->is_assign())
+    return;
+
+  auto &assign = to_code_assign(loc->code);
+  if (!(assign.rhs().get_bool("#malloc_result")))
+    return;
+
+  auto &instances = dynamic_objects.get(loc->location_number).instances;
+  exprt::operandst c;
+  for (auto inst_it = instances.begin(); inst_it != instances.end(); ++inst_it)
+  {
+    (--nodes.end())->equalities.push_back(
+      equal_exprt(inst_it->guard_symbol, read_rhs(inst_it->guard, loc)));
+    if (std::next(inst_it) != instances.end())
+      c.push_back(not_exprt(inst_it->guard_symbol));
+  }
+
+  (--nodes.end())->constraints.push_back(
+    implies_exprt(conjunction(c), instances.back().guard_symbol));
 }

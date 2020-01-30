@@ -14,6 +14,7 @@ Author: Peter Schrammel
 #include <ssa/unwindable_local_ssa.h>
 #include <domains/incremental_solver.h>
 #include <goto-programs/goto_functions.h>
+#include "dynamic_object.h"
 
 class ssa_dbt
 {
@@ -65,10 +66,11 @@ public:
     const function_namet &function_name,
     const goto_functionst::goto_functiont &goto_function,
     const namespacet &ns,
-    const ssa_heap_analysist &heap_analysis)
+    const ssa_heap_analysist &heap_analysis,
+    const dynamic_objectst &dynamic_objects)
   {
-    store[function_name]=
-      new unwindable_local_SSAt(goto_function, ns, heap_analysis);
+    store[function_name]=new unwindable_local_SSAt(
+      goto_function, ns, heap_analysis, dynamic_objects);
   }
 
 protected:
