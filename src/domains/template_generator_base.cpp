@@ -24,6 +24,7 @@ Author: Peter Schrammel
 #include "heap_domain.h"
 #include "sympath_domain.h"
 #include "product_domain.h"
+#include "array_domain.h"
 
 #include <algorithm>
 
@@ -267,35 +268,14 @@ void template_generator_baset::add_var(
       implies_exprt(init_guard, equal_exprt(aux_var, init_renaming_map[var])));
     post_guard=or_exprt(post_guard, init_guard);
   }
-  if(var.type().id()!=ID_array)
-  {
-    var_specs.push_back(var_spect());
-    var_spect &var_spec=var_specs.back();
-    var_spec.guards.pre_guard=pre_guard;
-    var_spec.guards.post_guard=post_guard;
-    var_spec.guards.aux_expr=aux_expr;
-    var_spec.guards.kind=kind;
-    var_spec.var=var;
-  }
 
-  // arrays
-  if(var.type().id()==ID_array && options.get_bool_option("arrays"))
-  {
-    const array_typet &array_type=to_array_type(var.type());
-    mp_integer size;
-    to_integer(array_type.size(), size);
-    for(mp_integer i=0; i<size; i=i+1)
-    {
-      var_specs.push_back(var_spect());
-      var_spect &var_spec=var_specs.back();
-      constant_exprt index=from_integer(i, array_type.size().type());
-      var_spec.guards.pre_guard=pre_guard;
-      var_spec.guards.post_guard=post_guard;
-      var_spec.guards.aux_expr=aux_expr;
-      var_spec.guards.kind=kind;
-      var_spec.var=index_exprt(var, index);
-    }
-  }
+  var_specs.push_back(var_spect());
+  var_spect &var_spec=var_specs.back();
+  var_spec.guards.pre_guard=pre_guard;
+  var_spec.guards.post_guard=post_guard;
+  var_spec.guards.aux_expr=aux_expr;
+  var_spec.guards.kind=kind;
+  var_spec.var=var;
 }
 
 void template_generator_baset::add_vars(
@@ -574,7 +554,11 @@ void template_generator_baset::instantiate_standard_domains(
     domains.emplace_back(
       new heap_domaint(domain_number, renaming_map, heap_var_specs, SSA));
   }
-
+  if(options.get_bool_option("arrays"))
+  {
+    domains.emplace_back(
+      new array_domaint(domain_number, renaming_map, var_specs, SSA.ns));
+  }
   if(options.get_bool_option("intervals"))
   {
     auto new_domain=new tpolyhedra_domaint(

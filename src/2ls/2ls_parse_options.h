@@ -49,6 +49,7 @@ class optionst;
   "(heap)" \
   "(values-refine)" \
   "(sympath)" \
+  "(arrays)" \
   "(enum-solver)(binsearch-solver)(arrays)"\
   "(string-abstraction)(no-arch)(arch):(floatbv)(fixedbv)" \
   "(round-to-nearest)(round-to-plus-inf)(round-to-minus-inf)(round-to-zero)" \
