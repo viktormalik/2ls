@@ -68,10 +68,13 @@ exprt array_domaint::row_segment_constraint(const template_rowt &row)
   const exprt interval_expr=and_exprt(
     binary_relation_exprt(row_expr.index_var, ID_ge, row_expr.lower_bound),
     binary_relation_exprt(row_expr.index_var, ID_lt, row_expr.upper_bound));
-  return and_exprt(
+  const exprt bounds_expr=and_exprt(
     binary_relation_exprt(
       row_expr.index_var, ID_ge, from_integer(0, row_expr.index_var.type())),
-    interval_expr);
+    binary_relation_exprt(
+      row_expr.index_var, ID_lt, to_array_type(row_expr.array.type()).size())
+  );
+  return and_exprt(bounds_expr, interval_expr);
 }
 
 bool array_domaint::edit_row(const rowt &row, valuet &_inv, bool improved)
@@ -125,13 +128,21 @@ void array_domaint::make_template(
       if(index_spec!=var_specs.end())
         index_var=index_spec->var;
 
+      auto &array_type=to_array_type(spec.var.type());
+      assert(array_type.is_complete());
+      auto &array_size=array_type.size();
+
+      // Ensure that all segment borders have the same type (array size type).
+      if(index_var.type()!=array_size.type())
+        index_var=typecast_exprt(index_var, array_size.type());
+
       // The array is hard-partitioned into 3 segments:
-      //   {0} ... {i} ... {i + 1} ... {10}
+      //   {0} ... {i} ... {i + 1} ... {size}
       auto index_plus_one=
         plus_exprt(index_var, from_integer(1, index_var.type()));
-      add_segment_row(spec, from_integer(0, index_var.type()), index_var);
+      add_segment_row(spec, from_integer(0, array_size.type()), index_var);
       add_segment_row(spec, index_var, index_plus_one);
-      add_segment_row(spec, index_plus_one, from_integer(10, index_var.type()));
+      add_segment_row(spec, index_plus_one, array_size);
     }
   }
 }

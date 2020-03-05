@@ -1,11 +1,11 @@
 extern void __VERIFIER_error() __attribute__ ((__noreturn__));
 void __VERIFIER_assert(int cond) { if(!(cond)) { ERROR: __VERIFIER_error(); } }
 
-#define N 10
+#define N 100
 
 int main ( ) {
   int a[N];
-  int i = 9;
+  int i = N - 1;
   while ( i >= 0 ) {
     a[i] = 42;
     i = i - 1;
