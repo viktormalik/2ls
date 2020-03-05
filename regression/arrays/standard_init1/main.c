@@ -15,5 +15,6 @@ int main ( ) {
   for ( x = 0 ; x < N ; x++ ) {
     __VERIFIER_assert(  a[x] == 42  );
   }
+  __VERIFIER_assert(a[0] == 42);
   return 0;
 }

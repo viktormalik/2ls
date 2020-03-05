@@ -60,6 +60,7 @@ struct var_spect
 {
   vart var;
   guardst guards;
+  var_listt related_vars;
 
   void output(std::ostream &out, const namespacet &ns) const;
 };

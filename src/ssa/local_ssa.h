@@ -25,6 +25,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "guard_map.h"
 #include "ssa_object.h"
 #include "may_alias_analysis.h"
+#include "array_index_analysis.h"
 
 #define TEMPLATE_PREFIX "__CPROVER_template"
 #define TEMPLATE_DECL TEMPLATE_PREFIX
@@ -52,6 +53,7 @@ public:
       ssa_objects,
       ssa_value_ai),
     alias_analysis(_goto_function, ns),
+    array_index_analysis(_goto_function, ns),
     guard_map(_goto_function.body),
     ssa_analysis(assignments),
     suffix(_suffix)
@@ -248,6 +250,7 @@ public:
   assignmentst assignments;
 
   may_alias_analysist alias_analysis;
+  array_index_analysist array_index_analysis;
 
 // protected:
   guard_mapt guard_map;

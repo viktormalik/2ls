@@ -25,8 +25,6 @@ Author: Peter Schrammel
 class template_generator_baset:public messaget
 {
 public:
-  typedef strategy_solver_baset::var_listt var_listt;
-
   explicit template_generator_baset(
     optionst &_options,
     ssa_dbt &_ssa_db,
@@ -91,6 +89,7 @@ protected:
     const guardst::guardt &pre_guard,
     guardst::guardt post_guard,
     const guardst::kindt &kind,
+    const var_listt &related_vars,
     var_specst &var_specs);
   void add_vars(
     const var_listt &vars_to_add,

@@ -81,6 +81,7 @@ void template_generator_callingcontextt::collect_variables_callingcontext(
         guard,
         guard,
         guardst::OUT, // the same for both forward and backward
+        {},
         var_specs);
     }
   }

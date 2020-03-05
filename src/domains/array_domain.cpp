@@ -11,6 +11,7 @@ Author: Viktor Malik <viktor.malik@gmail.com>
 #include "array_domain.h"
 #include <algorithm>
 #include <util/arith_tools.h>
+#include <ssa/local_ssa.h>
 
 void array_domaint::initialize_value(domaint::valuet &value)
 {
@@ -108,28 +109,29 @@ void array_domaint::make_template(
 
     if(spec.var.type().id()==ID_array)
     {
-      // For now, we use a concrete array index (used in the programs located
-      // in regression tests).
+      // For now, we assume that there is just a single written index i
+      assert(spec.related_vars.size()==1);
+      exprt index_var=spec.related_vars.at(0);
+      // Try to find the index variable in var_specs - if found, it means that
+      // it has been changed within the loop and the loop-back variant must be
+      // used.
       auto index_spec=std::find_if(
-        var_specs.begin(), var_specs.end(), [](const var_spect &v)
+        var_specs.begin(), var_specs.end(), [&index_var](const var_spect &v)
         {
           return v.var.id()==ID_symbol &&
-                 to_symbol_expr(v.var).get_identifier()=="main::1::i#lb21";
+                 get_original_name(to_symbol_expr(v.var))==
+                 get_original_name(to_symbol_expr(index_var));
         });
+      if(index_spec!=var_specs.end())
+        index_var=index_spec->var;
+
       // The array is hard-partitioned into 3 segments:
-      //   {0} ... {i#lb21} ... {i#lb21 + 1} ... {10}
-      add_segment_row(
-        spec,
-        from_integer(0, index_spec->var.type()),
-        index_spec->var);
-      add_segment_row(
-        spec,
-        index_spec->var,
-        plus_exprt(index_spec->var, from_integer(1, index_spec->var.type())));
-      add_segment_row(
-        spec,
-        plus_exprt(index_spec->var, from_integer(1, index_spec->var.type())),
-        from_integer(10, index_spec->var.type()));
+      //   {0} ... {i} ... {i + 1} ... {10}
+      auto index_plus_one=
+        plus_exprt(index_var, from_integer(1, index_var.type()));
+      add_segment_row(spec, from_integer(0, index_var.type()), index_var);
+      add_segment_row(spec, index_var, index_plus_one);
+      add_segment_row(spec, index_plus_one, from_integer(10, index_var.type()));
     }
   }
 }
@@ -173,21 +175,40 @@ void array_domaint::project_on_vars(
   for(rowt row=0; row<templ.size(); ++row)
   {
     auto &row_expr=dynamic_cast<template_row_exprt &>(*templ[row].expr);
-    if(vars.find(row_expr.array)==vars.end())
-      continue;
+    // The row must be projected onto each index expression occurring on RHS
+    // for the given array.
+    auto array_name=get_original_name(to_symbol_expr(row_expr.array));
+    auto &read_indices=SSA.array_index_analysis.read_indices.at(array_name);
 
-    // Row constraint
-    c.push_back(get_row_pre_constraint(row, value));
-    // Equality x#phi24 == idx#row for each segment since x#phi24 is the only
-    // expression that occurs as an index of a#lb21 after the creation loop.
-    c.push_back(
-      equal_exprt(
-        row_expr.index_var,
-        symbol_exprt("main::1::x#phi24", row_expr.index_var.type())));
+    for(auto &read_index_info : read_indices)
+    {
+      const exprt read_index=SSA.read_rhs(
+        read_index_info.index, read_index_info.loc);
+      // Row constraint projected on read_index
+      c.push_back(project_row_on_index(row, value, read_index));
+    }
   }
   result=conjunction(c);
 }
 
+exprt array_domaint::project_row_on_index(
+  simple_domaint::rowt row,
+  const simple_domaint::valuet &value,
+  const exprt &index)
+{
+  auto row_expr=dynamic_cast<template_row_exprt &>(*templ[row].expr);
+  // Get row pre-constraint
+  exprt row_value=get_row_pre_constraint(row, value);
+  // Typecast index if needed
+  exprt index_expr=index;
+  if(index.type()!=row_expr.index_var.type())
+    index_expr=typecast_exprt(index, row_expr.index_var.type());
+  // Replace row index by the index to project on
+  replace_mapt repl_map;
+  repl_map[row_expr.index_var]=index_expr;
+  replace_expr(repl_map, row_value);
+  return row_value;
+}
 
 void array_domaint::template_row_exprt::output(
   std::ostream &out,

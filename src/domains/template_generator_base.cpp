@@ -167,6 +167,24 @@ void template_generator_baset::collect_variables_loop(
           obj_post_guard=and_exprt(obj_post_guard, guard);
         }
 
+        var_listt related_vars;
+        // For arrays, we add all written indices into related variables
+        if(o_it->type().id()==ID_array)
+        {
+          const irep_idt array_name=o_it->get_identifier();
+          auto &index_domain=SSA.array_index_analysis[n_it->loophead->location];
+          auto indices=index_domain.written_indices.find(array_name);
+
+          if(indices!=index_domain.written_indices.end())
+          {
+            for(auto &index_info : indices->second)
+            {
+              related_vars.push_back(
+                SSA.read_rhs(index_info.index, n_it->loophead->location));
+            }
+          }
+        }
+
         exprt init_expr;
         get_init_expr(SSA, o_it, n_it, init_expr);
         add_var(
@@ -174,6 +192,7 @@ void template_generator_baset::collect_variables_loop(
           pre_guard,
           obj_post_guard,
           guardst::kindt::LOOP,
+          related_vars,
           var_specs);
 
 #ifdef DEBUG
@@ -253,6 +272,7 @@ void template_generator_baset::add_var(
   const guardst::guardt &pre_guard,
   guardst::guardt post_guard,
   const guardst::kindt &kind,
+  const var_listt &related_vars,
   var_specst &var_specs)
 {
   exprt aux_expr=true_exprt();
@@ -276,6 +296,7 @@ void template_generator_baset::add_var(
   var_spec.guards.aux_expr=aux_expr;
   var_spec.guards.kind=kind;
   var_spec.var=var;
+  var_spec.related_vars=related_vars;
 }
 
 void template_generator_baset::add_vars(
@@ -286,7 +307,7 @@ void template_generator_baset::add_vars(
   var_specst &var_specs)
 {
   for(const auto &v : vars_to_add)
-    add_var(v, pre_guard, post_guard, kind, var_specs);
+    add_var(v, pre_guard, post_guard, kind, {}, var_specs);
 }
 
 void template_generator_baset::add_vars(
@@ -297,7 +318,7 @@ void template_generator_baset::add_vars(
   var_specst &var_specs)
 {
   for(const auto &v : vars_to_add)
-    add_var(v, pre_guard, post_guard, kind, var_specs);
+    add_var(v, pre_guard, post_guard, kind, {}, var_specs);
 }
 
 void template_generator_baset::add_vars(
@@ -308,7 +329,7 @@ void template_generator_baset::add_vars(
   var_specst &var_specs)
 {
   for(const auto &v : vars_to_add)
-    add_var(v, pre_guard, post_guard, kind, var_specs);
+    add_var(v, pre_guard, post_guard, kind, {}, var_specs);
 }
 
 void template_generator_baset::handle_special_functions(const local_SSAt &SSA)
@@ -557,7 +578,7 @@ void template_generator_baset::instantiate_standard_domains(
   if(options.get_bool_option("arrays"))
   {
     domains.emplace_back(
-      new array_domaint(domain_number, renaming_map, var_specs, SSA.ns));
+      new array_domaint(domain_number, renaming_map, var_specs, SSA));
   }
   if(options.get_bool_option("intervals"))
   {

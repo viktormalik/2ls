@@ -12,6 +12,7 @@ Author: Viktor Malik <viktor.malik@gmail.com>
 #define CPROVER_2LS_DOMAINS_ARRAY_DOMAIN_H
 
 #include "simple_domain.h"
+#include <ssa/local_ssa.h>
 
 class array_domaint:public simple_domaint
 {
@@ -20,10 +21,11 @@ public:
     unsigned int domain_number,
     replace_mapt &renaming_map,
     const var_specst &var_specs,
-    const namespacet &ns):
-    simple_domaint(domain_number, renaming_map, ns)
+    const local_SSAt &SSA):
+    simple_domaint(domain_number, renaming_map, SSA.ns),
+    SSA(SSA)
   {
-    make_template(var_specs, ns);
+    make_template(var_specs, SSA.ns);
   }
 
   // A template row is a single segment of a single array
@@ -110,6 +112,9 @@ protected:
   static exprt row_segment_constraint(const template_rowt &row);
   exprt get_current_item_model();
 
+  exprt project_row_on_index(rowt row, const valuet &value, const exprt &index);
+
+  const local_SSAt &SSA;
 };
 
 
