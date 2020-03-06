@@ -13,6 +13,8 @@ Author: Viktor Malik <viktor.malik@gmail.com>
 #include <util/arith_tools.h>
 #include <ssa/local_ssa.h>
 
+/// Value initialization - LOOP rows are initialized to false (bottom)
+///                          IN rows are initialized to true (top)
 void array_domaint::initialize_value(domaint::valuet &value)
 {
   auto &array_value=dynamic_cast<array_valuet &>(value);
@@ -20,12 +22,14 @@ void array_domaint::initialize_value(domaint::valuet &value)
   for(auto row=0; row<templ.size(); row++)
   {
     if(templ[row].guards.kind==guardst::IN)
-      array_value[row]=true_exprt(); // marker for oo
+      array_value[row]=true_exprt();
     else
-      array_value[row]=false_exprt(); // marker for -oo
+      array_value[row]=false_exprt();
   }
 }
 
+/// Row pre-constraint:
+///   (pre_guard && segment_constraint) => value_constraint
 exprt array_domaint::get_row_pre_constraint(
   const rowt row,
   const valuet &value)
@@ -40,6 +44,8 @@ exprt array_domaint::get_row_pre_constraint(
     get_row_value_constraint(row, value));
 }
 
+/// Row post-constraint:
+///   (post_guard && segment_constraint) => value_constraint
 exprt array_domaint::get_row_post_constraint(
   rowt row,
   const valuet &value)
@@ -62,6 +68,10 @@ exprt array_domaint::get_row_post_constraint(
   return and_exprt(templ[row].guards.aux_expr, not_exprt(row_post_constraint));
 }
 
+/// Row segment constraint:
+///   index >= 0 && index < size && index >= lower && index < upper
+/// Index expression is type-casted to match the type of boundary expressions.
+/// Boundary expressions are guaranteed to have the same type.
 exprt array_domaint::row_segment_constraint(const template_rowt &row)
 {
   auto row_expr=dynamic_cast<array_domaint::template_row_exprt &>(*row.expr);
@@ -77,6 +87,8 @@ exprt array_domaint::row_segment_constraint(const template_rowt &row)
   return and_exprt(bounds_expr, interval_expr);
 }
 
+/// Update a row value using the model of an array element that lies in the
+/// given segment obtained from the SMT solver.
 bool array_domaint::edit_row(const rowt &row, valuet &_inv, bool improved)
 {
   auto &value_row=dynamic_cast<array_valuet &>(_inv)[row];
@@ -147,6 +159,8 @@ void array_domaint::make_template(
   }
 }
 
+/// Add a single segment row to the template.
+/// A unique index variable for the segment is created.
 void array_domaint::add_segment_row(
   const var_spect &var_spec,
   const exprt &lower,
@@ -163,6 +177,8 @@ void array_domaint::add_segment_row(
   templ_row.guards=var_spec.guards;
 }
 
+/// Retrieve model value of the array item that was used as a representative
+/// item for the current row segment.
 exprt array_domaint::get_current_item_model()
 {
   auto &array_model=smt_model_values[0];
@@ -174,6 +190,12 @@ exprt array_domaint::get_current_item_model()
   return to_array_expr(array_model).operands()[index_value];
 }
 
+/// Projection of the computed invariant on variables.
+/// Each segment is projected onto all indices that are used to read from the
+/// array corresponding to the given row. This projection is done by replacing
+/// the segment index variable by the given read index variable.
+/// This ensures that the computed array invariant is applied every time when
+/// reading from the given array.
 void array_domaint::project_on_vars(
   domaint::valuet &base_value,
   const var_sett &vars,
@@ -202,6 +224,8 @@ void array_domaint::project_on_vars(
   result=conjunction(c);
 }
 
+/// Get row invariant (i.e. row pre-constraint) projected onto a given index
+/// expression.
 exprt array_domaint::project_row_on_index(
   simple_domaint::rowt row,
   const simple_domaint::valuet &value,
