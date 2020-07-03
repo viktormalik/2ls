@@ -168,7 +168,8 @@ void template_generator_baset::collect_variables_loop(
         }
 
         var_listt related_vars;
-        // For arrays, we add all written indices into related variables
+        // For arrays, we add all indices written in the same loop into
+        // related variables
         if(o_it->type().id()==ID_array)
         {
           const irep_idt array_name=o_it->get_identifier();
@@ -179,8 +180,34 @@ void template_generator_baset::collect_variables_loop(
           {
             for(auto &index_info : indices->second)
             {
-              related_vars.push_back(
-                SSA.read_rhs(index_info.index, n_it->loophead->location));
+              // Filter only indices written within the loop
+              if(index_info.loc->location_number>=
+                 n_it->loophead->location->location_number &&
+                 index_info.loc->location_number<
+                 n_it->location->location_number)
+              {
+                auto idx_id=index_info.index.id()==ID_symbol
+                            ? to_symbol_expr(index_info.index).get_identifier()
+                            : ID_empty;
+                if(idx_id!=ID_empty && phi_nodes.find(idx_id)!=phi_nodes.end())
+                {
+                  // If the index is a symbol that is updated in the loop, we
+                  // have to use its loop-back variant
+                  symbol_exprt idx_pre_var;
+                  get_pre_var(
+                    SSA,
+                    SSA.ssa_objects.objects.find(
+                      ssa_objectt(index_info.index, SSA.ns)),
+                    n_it,
+                    idx_pre_var);
+                  related_vars.push_back(idx_pre_var);
+                }
+                else
+                { // Otherwise, use the RHS variant of the symbol
+                  related_vars.push_back(
+                    SSA.read_rhs(index_info.index, n_it->loophead->location));
+                }
+              }
             }
           }
         }

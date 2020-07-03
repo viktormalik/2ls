@@ -82,8 +82,7 @@ exprt array_domaint::row_segment_constraint(const template_rowt &row)
     binary_relation_exprt(
       row_expr.index_var, ID_ge, from_integer(0, row_expr.index_var.type())),
     binary_relation_exprt(
-      row_expr.index_var, ID_lt, to_array_type(row_expr.array.type()).size())
-  );
+      row_expr.index_var, ID_lt, to_array_type(row_expr.array.type()).size()));
   return and_exprt(bounds_expr, interval_expr);
 }
 
@@ -127,19 +126,8 @@ void array_domaint::make_template(
       // For now, we assume that there is just a single written index i
       assert(spec.related_vars.size()==1);
       exprt index_var=spec.related_vars.at(0);
-      // Try to find the index variable in var_specs - if found, it means that
-      // it has been changed within the loop and the loop-back variant must be
-      // used.
-      auto index_spec=std::find_if(
-        var_specs.begin(), var_specs.end(), [&index_var](const var_spect &v)
-        {
-          return v.var.id()==ID_symbol &&
-                 get_original_name(to_symbol_expr(v.var))==
-                 get_original_name(to_symbol_expr(index_var));
-        });
-      if(index_spec!=var_specs.end())
-        index_var=index_spec->var;
 
+      // Get array size
       auto &array_type=to_array_type(spec.var.type());
       assert(array_type.is_complete());
       auto &array_size=array_type.size();
