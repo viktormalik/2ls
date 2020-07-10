@@ -136,6 +136,12 @@ protected:
     local_SSAt::nodest::const_iterator n_it,
     exprt &expr);
 
+  void replace_array_index_loop(
+    exprt &index,
+    local_SSAt::nodest::const_iterator n_it,
+    const local_SSAt &SSA,
+    const ssa_domaint::phi_nodest &phi_nodes);
+
   virtual void handle_special_functions(const local_SSAt &SSA);
   void instantiate_standard_domains(const local_SSAt &SSA);
   bool instantiate_custom_templates(const local_SSAt &SSA);
