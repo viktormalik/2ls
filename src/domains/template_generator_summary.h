@@ -20,8 +20,9 @@ public:
   explicit template_generator_summaryt(
     optionst &_options,
     ssa_dbt &_ssa_db,
-    ssa_local_unwindert &_ssa_local_unwinder):
-    template_generator_baset(_options, _ssa_db, _ssa_local_unwinder)
+    ssa_local_unwindert &_ssa_local_unwinder,
+    incremental_solvert *solver=nullptr):
+    template_generator_baset(_options, _ssa_db, _ssa_local_unwinder, solver)
   {
   }
 
