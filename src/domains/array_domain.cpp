@@ -193,6 +193,9 @@ void array_domaint::add_segment_row(
     new template_row_exprt(var_spec.var, index_var, lower, upper));
 
   templ_row.guards=var_spec.guards;
+
+  segmentation_map[var_spec.var].push_back(
+    dynamic_cast<template_row_exprt *>(templ_row.expr.get()));
 }
 
 /// Retrieve model value of the array item that was used as a representative
@@ -209,9 +212,7 @@ exprt array_domaint::get_current_item_model()
 }
 
 /// Projection of the computed invariant on variables.
-/// Each segment is projected onto all indices that are used to read from the
-/// array corresponding to the given row. This projection is done by replacing
-/// the segment index variable by the given read index variable.
+/// Includes mapping of segments onto read indices of corresponding arrays.
 /// This ensures that the computed array invariant is applied every time when
 /// reading from the given array.
 void array_domaint::project_on_vars(
@@ -219,27 +220,8 @@ void array_domaint::project_on_vars(
   const var_sett &vars,
   exprt &result)
 {
-  auto &value=dynamic_cast<array_valuet &>(base_value);
-  assert(value.size()==templ.size());
-
-  exprt::operandst c;
-  for(rowt row=0; row<templ.size(); ++row)
-  {
-    auto &row_expr=dynamic_cast<template_row_exprt &>(*templ[row].expr);
-    // The row must be projected onto each index expression occurring on RHS
-    // for the given array.
-    auto array_name=get_original_name(to_symbol_expr(row_expr.array));
-    auto &read_indices=SSA.array_index_analysis.read_indices.at(array_name);
-
-    for(auto &read_index_info : read_indices)
-    {
-      const exprt read_index=SSA.read_rhs(
-        read_index_info.index, read_index_info.loc);
-      // Row constraint projected on read_index
-      c.push_back(project_row_on_index(row, value, read_index));
-    }
-  }
-  result=conjunction(c);
+  simple_domaint::project_on_vars(base_value, {}, result);
+  result = and_exprt(result, map_segments_to_read_indices());
 }
 
 /// Get row invariant (i.e. row pre-constraint) projected onto a given index
@@ -311,6 +293,52 @@ bool array_domaint::ordered_indices(
     res=true;
   solver->pop_context();
   return res;
+}
+
+/// Pre-constraint needs to include a mapping of segment indices to read indices
+/// so that an already computed invariant for one loop can be applied and can
+/// help to compute an invariant of another loop.
+exprt array_domaint::to_pre_constraints(const simple_domaint::valuet &value)
+{
+  return and_exprt(
+    simple_domaint::to_pre_constraints(value), map_segments_to_read_indices());
+}
+
+/// Map symbolic indices of segments onto actually read indices.
+/// For each segment of an array and for each index read from that array:
+///   (idx#read >= lower && idx#read < upper) => idx#read == idx#segment
+exprt array_domaint::map_segments_to_read_indices()
+{
+  exprt::operandst result;
+  for (auto &array : segmentation_map)
+  {
+    auto array_name=get_original_name(to_symbol_expr(array.first));
+    auto index_type=array.second.at(0)->index_var.type();
+    auto &read_indices=SSA.array_index_analysis.read_indices.at(array_name);
+
+    exprt::operandst array_constraint;
+    for (auto &read_index_info : read_indices)
+    {
+      exprt read_index=SSA.read_rhs(
+        read_index_info.index, read_index_info.loc);
+      if (read_index.type() != index_type)
+        read_index = typecast_exprt(read_index, index_type);
+
+      exprt::operandst index_constraint;
+      for (auto &segment : array.second)
+      {
+        index_constraint.push_back(
+          implies_exprt(
+            and_exprt(
+              binary_relation_exprt(read_index, ID_ge, segment->lower_bound),
+              binary_relation_exprt(read_index, ID_lt, segment->upper_bound)),
+            equal_exprt(read_index, segment->index_var)));
+      }
+      array_constraint.push_back(conjunction(index_constraint));
+    }
+    result.push_back(conjunction(array_constraint));
+  }
+  return conjunction(result);
 }
 
 void array_domaint::template_row_exprt::output(

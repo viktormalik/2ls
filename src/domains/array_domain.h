@@ -88,6 +88,9 @@ public:
 
   void initialize_value(domaint::valuet &value) override;
 
+  // Override pre-constraint to add projection of the current invariant onto
+  // all read indices.
+  exprt to_pre_constraints(const valuet &value) override;
   // We have to override row pre- and post-constraints since segment bounds must
   // be added to precondition.
   exprt get_row_pre_constraint(
@@ -117,12 +120,15 @@ protected:
     const exprt &array_size);
 
   static exprt row_segment_constraint(const template_rowt &row);
+  exprt map_segments_to_read_indices();
   exprt get_current_item_model();
 
   exprt project_row_on_index(rowt row, const valuet &value, const exprt &index);
 
   const local_SSAt &SSA;
   incremental_solvert *solver;
+
+  std::map<vart, std::vector<const template_row_exprt *>> segmentation_map;
 };
 
 
