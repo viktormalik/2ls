@@ -21,9 +21,11 @@ public:
     unsigned int domain_number,
     replace_mapt &renaming_map,
     const var_specst &var_specs,
-    const local_SSAt &SSA):
+    const local_SSAt &SSA,
+    incremental_solvert *solver):
     simple_domaint(domain_number, renaming_map, SSA.ns),
-    SSA(SSA)
+    SSA(SSA),
+    solver(solver)
   {
     make_template(var_specs, SSA.ns);
   }
@@ -108,6 +110,11 @@ protected:
     const var_spect &var_spec,
     const exprt &lower,
     const exprt &upper);
+  bool order_indices(var_listt &indices, const exprt &array_size);
+  bool ordered_indices(
+    const exprt &first,
+    const exprt &second,
+    const exprt &array_size);
 
   static exprt row_segment_constraint(const template_rowt &row);
   exprt get_current_item_model();
@@ -115,6 +122,7 @@ protected:
   exprt project_row_on_index(rowt row, const valuet &value, const exprt &index);
 
   const local_SSAt &SSA;
+  incremental_solvert *solver;
 };
 
 

@@ -12,6 +12,7 @@ Author: Viktor Malik <viktor.malik@gmail.com>
 #include <algorithm>
 #include <util/arith_tools.h>
 #include <ssa/local_ssa.h>
+#include <util/simplify_expr.h>
 
 /// Value initialization - LOOP rows are initialized to false (bottom)
 ///                          IN rows are initialized to true (top)
@@ -123,26 +124,55 @@ void array_domaint::make_template(
 
     if(spec.var.type().id()==ID_array)
     {
-      // For now, we assume that there is just a single written index i
-      assert(spec.related_vars.size()==1);
-      exprt index_var=spec.related_vars.at(0);
-
       // Get array size
       auto &array_type=to_array_type(spec.var.type());
       assert(array_type.is_complete());
       auto &array_size=array_type.size();
 
-      // Ensure that all segment borders have the same type (array size type).
-      if(index_var.type()!=array_size.type())
-        index_var=typecast_exprt(index_var, array_size.type());
+      auto &index_type=array_size.type();
 
-      // The array is hard-partitioned into 3 segments:
-      //   {0} ... {i} ... {i + 1} ... {size}
-      auto index_plus_one=
-        plus_exprt(index_var, from_integer(1, index_var.type()));
-      add_segment_row(spec, from_integer(0, array_size.type()), index_var);
-      add_segment_row(spec, index_var, index_plus_one);
-      add_segment_row(spec, index_plus_one, array_size);
+      auto written_indices=spec.related_vars;
+      if(order_indices(written_indices, array_size))
+      { // Indices can be ordered - create a single segmentation
+        // The first index border is {0}
+        exprt last_border=make_zero(index_type);
+        for(exprt index_var : written_indices)
+        {
+          index_var=simplify_expr(index_var, ns);
+          // Ensure that all segment borders have the same type.
+          if(index_var.type()!=index_type)
+            index_var=typecast_exprt(index_var, index_type);
+
+          // For each index i, add two segments:
+          // {last} ... {i}
+          if(last_border!=index_var)
+            add_segment_row(spec, last_border, index_var);
+          // {i} ... {i + 1}
+          auto index_plus_one=simplify_expr(expr_plus_one(index_var), ns);
+          add_segment_row(spec, index_var, index_plus_one);
+
+          last_border=index_plus_one;
+        }
+
+        // The last segment is {last} ... {size}
+        add_segment_row(spec, last_border, array_size);
+      }
+      else
+      { // Indices cannot be ordered - create one segmentation for each index
+        for(exprt index_var : written_indices)
+        {
+          // Ensure that all segment borders have the same type.
+          if(index_var.type()!=index_type)
+            index_var=typecast_exprt(index_var, index_type);
+
+          exprt index_plus_one=expr_plus_one(index_var);
+          // For each written index i, create a segmentation:
+          //   {0} ... {i] ... {i + 1} ... {size}
+          add_segment_row(spec, make_zero(index_type), index_var);
+          add_segment_row(spec, index_var, index_plus_one);
+          add_segment_row(spec, index_plus_one, array_size);
+        }
+      }
     }
   }
 }
@@ -231,6 +261,56 @@ exprt array_domaint::project_row_on_index(
   repl_map[row_expr.index_var]=index_expr;
   replace_expr(repl_map, row_value);
   return row_value;
+}
+
+/// Try to find ordering among given index expressions.
+/// If a unique ordering can be found, orders indices in-situ and returns true,
+/// otherwise returns false.
+bool array_domaint::order_indices(var_listt &indices, const exprt &array_size)
+{
+  for(unsigned i=0; i<indices.size()-1; ++i)
+  {
+    if(ordered_indices(indices[i+1], indices[i], array_size))
+    {
+      const exprt temp=indices[i];
+      indices[i]=indices[i+1];
+      indices[i+1]=temp;
+    }
+    else if(!ordered_indices(indices[i], indices[i+1], array_size))
+      return false;
+  }
+  return true;
+}
+
+/// Check if there exists an ordering relation <= between two index expressions.
+/// Queries SMT solver for negation of the formula:
+///   (i1 >= 0 && i1 < size && i2 >= 0 && i2 < size) => i1 <= i2
+///
+/// If the negation is unsatisfiable, then the formula always holds and there
+/// exists an ordering.
+bool array_domaint::ordered_indices(
+  const exprt &first,
+  const exprt &second,
+  const exprt &array_size)
+{
+  exprt::operandst bounds=
+    {
+      binary_relation_exprt(first, ID_ge, from_integer(0, first.type())),
+      binary_relation_exprt(first, ID_lt, array_size),
+      binary_relation_exprt(second, ID_ge, from_integer(0, second.type())),
+      binary_relation_exprt(second, ID_lt, array_size),
+    };
+  const exprt ordering_expr=implies_exprt(
+    conjunction(bounds),
+    binary_relation_exprt(first, ID_le, second));
+
+  solver->new_context();
+  *solver << not_exprt(ordering_expr);
+  bool res=false;
+  if((*solver)()==decision_proceduret::D_UNSATISFIABLE)
+    res=true;
+  solver->pop_context();
+  return res;
 }
 
 void array_domaint::template_row_exprt::output(

@@ -579,3 +579,19 @@ std::string get_dynobj_instance(const irep_idt &id)
   size_t end=name.find_first_not_of("0123456789co", start);
   return name.substr(start, end-start);
 }
+
+/// Add +1 to expression. If the expression is a typecast, add +1 to the inner
+/// expression.
+exprt expr_plus_one(const exprt &expr)
+{
+  exprt result=expr;
+  if(result.id()==ID_typecast)
+    result=to_typecast_expr(result).op();
+
+  result=plus_exprt(result, make_one(result.type()));
+
+  if(result.type()!=expr.type())
+    result=typecast_exprt(result, expr.type());
+
+  return result;
+}

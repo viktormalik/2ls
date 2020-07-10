@@ -587,7 +587,7 @@ void template_generator_baset::instantiate_standard_domains(
   if(options.get_bool_option("arrays"))
   {
     domains.emplace_back(
-      new array_domaint(domain_number, renaming_map, var_specs, SSA));
+      new array_domaint(domain_number, renaming_map, var_specs, SSA, solver));
   }
   if(options.get_bool_option("intervals"))
   {
