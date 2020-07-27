@@ -581,7 +581,7 @@ std::unique_ptr<domaint> template_generator_baset::instantiate_standard_domains(
     if(!eq_var_specs.empty())
       domains.emplace_back(
         new equality_domaint(
-          domain_number, renaming_map, eq_var_specs, SSA.ns));
+          domain_number++, renaming_map, eq_var_specs, SSA.ns));
   }
 
   if(options.get_bool_option("heap"))
@@ -589,7 +589,7 @@ std::unique_ptr<domaint> template_generator_baset::instantiate_standard_domains(
     auto heap_var_specs=filter_heap_domain(var_specs);
     if(!heap_var_specs.empty())
       domains.emplace_back(
-        new heap_domaint(domain_number, renaming_map, heap_var_specs, SSA));
+        new heap_domaint(domain_number++, renaming_map, heap_var_specs, SSA));
   }
   if(options.get_bool_option("arrays"))
   {
@@ -597,7 +597,7 @@ std::unique_ptr<domaint> template_generator_baset::instantiate_standard_domains(
     if(!array_var_specs.empty())
       domains.emplace_back(
         new array_domaint(
-          domain_number, renaming_map, array_var_specs, SSA, solver, *this));
+          domain_number++, renaming_map, array_var_specs, SSA, solver, *this));
   }
   if(options.get_bool_option("intervals"))
   {
@@ -605,7 +605,7 @@ std::unique_ptr<domaint> template_generator_baset::instantiate_standard_domains(
     if(!templ_var_specs.empty())
     {
       auto new_domain=new tpolyhedra_domaint(
-        domain_number, renaming_map, SSA.ns, options);
+        domain_number++, renaming_map, SSA.ns, options);
       new_domain->add_interval_template(templ_var_specs, SSA.ns);
       domains.emplace_back(new_domain);
     }
@@ -616,7 +616,7 @@ std::unique_ptr<domaint> template_generator_baset::instantiate_standard_domains(
     if(!templ_var_specs.empty())
     {
       auto new_domain=new tpolyhedra_domaint(
-        domain_number, renaming_map, SSA.ns, options);
+        domain_number++, renaming_map, SSA.ns, options);
       new_domain->add_difference_template(templ_var_specs, SSA.ns);
       new_domain->add_interval_template(templ_var_specs, SSA.ns);
       domains.emplace_back(new_domain);
@@ -628,7 +628,7 @@ std::unique_ptr<domaint> template_generator_baset::instantiate_standard_domains(
     if(!templ_var_specs.empty())
     {
       auto new_domain=new tpolyhedra_domaint(
-        domain_number, renaming_map, SSA.ns, options);
+        domain_number++, renaming_map, SSA.ns, options);
       new_domain->add_sum_template(templ_var_specs, SSA.ns);
       new_domain->add_difference_template(templ_var_specs, SSA.ns);
       new_domain->add_interval_template(templ_var_specs, SSA.ns);
@@ -641,7 +641,7 @@ std::unique_ptr<domaint> template_generator_baset::instantiate_standard_domains(
     if(!templ_var_specs.empty())
     {
       auto new_domain=new tpolyhedra_domaint(
-        domain_number, renaming_map, SSA.ns, options);
+        domain_number++, renaming_map, SSA.ns, options);
       new_domain->add_difference_template(templ_var_specs, SSA.ns);
       new_domain->add_quadratic_template(templ_var_specs, SSA.ns);
       domains.emplace_back(new_domain);
@@ -656,12 +656,12 @@ std::unique_ptr<domaint> template_generator_baset::instantiate_standard_domains(
   else
     domain=std::unique_ptr<domaint>(
       new product_domaint(
-        domain_number, renaming_map, SSA.ns, std::move(domains)));
+        domain_number++, renaming_map, SSA.ns, std::move(domains)));
 
   if(options.get_bool_option("sympath"))
     domain=std::unique_ptr<domaint>(
       new sympath_domaint(
-        domain_number, renaming_map, SSA, std::move(domain)));
+        domain_number++, renaming_map, SSA, std::move(domain)));
 
   return domain;
 }
