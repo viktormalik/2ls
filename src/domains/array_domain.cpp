@@ -32,12 +32,9 @@ array_domaint::array_domaint(
   // Split arrays to segments and create a new set of var specs, each
   // representing one segment.
   make_segments(var_specs, SSA.ns);
-  auto new_var_specs=var_specs_from_segments();
-
-  auto interval_domain=new tpolyhedra_domaint(
-    domain_number, renaming_map, SSA.ns, template_generator.options);
-  interval_domain->add_interval_template(new_var_specs, SSA.ns);
-  inner_domain=std::unique_ptr<domaint>(interval_domain);
+  auto segment_var_specs=var_specs_from_segments();
+  inner_domain=
+    template_generator.instantiate_standard_domains(segment_var_specs, SSA);
 }
 
 /// Value initialization - initialize inner domains
