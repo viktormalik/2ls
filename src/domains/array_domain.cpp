@@ -9,114 +9,50 @@ Author: Viktor Malik <viktor.malik@gmail.com>
 /// Abstract domain for representing contents of arrays
 
 #include "array_domain.h"
+#include "tpolyhedra_domain.h"
+#include "strategy_solver_array.h"
 #include <algorithm>
 #include <util/arith_tools.h>
 #include <ssa/local_ssa.h>
 #include <util/simplify_expr.h>
 
-/// Value initialization - LOOP rows are initialized to false (bottom)
-///                          IN rows are initialized to true (top)
+unsigned array_domaint::segment_cnt=0;
+
+array_domaint::array_domaint(
+  unsigned int domain_number,
+  replace_mapt &renaming_map,
+  const var_specst &var_specs,
+  const local_SSAt &SSA,
+  incremental_solvert *solver,
+  template_generator_baset &template_generator):
+  domaint(domain_number, renaming_map, SSA.ns),
+  SSA(SSA),
+  solver(solver)
+{
+  // Split arrays to segments and create a new set of var specs, each
+  // representing one segment.
+  make_segments(var_specs, SSA.ns);
+  auto new_var_specs=var_specs_from_segments();
+
+  auto interval_domain=new tpolyhedra_domaint(
+    domain_number, renaming_map, SSA.ns, template_generator.options);
+  interval_domain->add_interval_template(new_var_specs, SSA.ns);
+  inner_domain=std::unique_ptr<domaint>(interval_domain);
+}
+
+/// Value initialization - initialize inner domains
 void array_domaint::initialize_value(domaint::valuet &value)
 {
   auto &array_value=dynamic_cast<array_valuet &>(value);
-  array_value.resize(templ.size());
-  for(auto row=0; row<templ.size(); row++)
-  {
-    if(templ[row].guards.kind==guardst::IN)
-      array_value[row]=true_exprt();
-    else
-      array_value[row]=false_exprt();
-  }
+  inner_domain->initialize_value(*array_value.inner_value);
 }
 
-/// Row pre-constraint:
-///   (pre_guard && segment_constraint) => value_constraint
-exprt array_domaint::get_row_pre_constraint(
-  const rowt row,
-  const valuet &value)
-{
-  // For exit variables the result is true
-  if(templ[row].guards.kind==guardst::OUT ||
-     templ[row].guards.kind==guardst::OUTL)
-    return true_exprt();
-
-  return implies_exprt(
-    and_exprt(templ[row].guards.pre_guard, row_segment_constraint(templ[row])),
-    get_row_value_constraint(row, value));
-}
-
-/// Row post-constraint:
-///   (post_guard && segment_constraint) => value_constraint
-exprt array_domaint::get_row_post_constraint(
-  rowt row,
-  const valuet &value)
-{
-  exprt row_post_constraint;
-  if(templ[row].guards.kind==guardst::IN)
-    row_post_constraint=true_exprt();
-  else
-  {
-    auto row_expr=get_row_value_constraint(row, value);
-    row_post_constraint=implies_exprt(
-      and_exprt(
-        templ[row].guards.post_guard, row_segment_constraint(templ[row])),
-      row_expr);
-  }
-
-  if(templ[row].guards.kind==guardst::LOOP)
-    rename(row_post_constraint);
-
-  return and_exprt(templ[row].guards.aux_expr, not_exprt(row_post_constraint));
-}
-
-/// Row segment constraint:
-///   index >= 0 && index < size && index >= lower && index < upper
-/// Index expression is type-casted to match the type of boundary expressions.
-/// Boundary expressions are guaranteed to have the same type.
-exprt array_domaint::row_segment_constraint(const template_rowt &row)
-{
-  auto row_expr=dynamic_cast<array_domaint::template_row_exprt &>(*row.expr);
-  const exprt interval_expr=and_exprt(
-    binary_relation_exprt(row_expr.index_var, ID_ge, row_expr.lower_bound),
-    binary_relation_exprt(row_expr.index_var, ID_lt, row_expr.upper_bound));
-  const exprt bounds_expr=and_exprt(
-    binary_relation_exprt(
-      row_expr.index_var, ID_ge, from_integer(0, row_expr.index_var.type())),
-    binary_relation_exprt(
-      row_expr.index_var, ID_lt, to_array_type(row_expr.array.type()).size()));
-  return and_exprt(bounds_expr, interval_expr);
-}
-
-/// Update a row value using the model of an array element that lies in the
-/// given segment obtained from the SMT solver.
-bool array_domaint::edit_row(const rowt &row, valuet &_inv, bool improved)
-{
-  auto &value_row=dynamic_cast<array_valuet &>(_inv)[row];
-
-  // Retrieve value of the used representative item from the updated array
-  auto segment_item_model=get_current_item_model();
-
-  std::cerr << "Updating array segment " << row << ": model value is "
-            << from_expr(ns, "", segment_item_model) << "\n";
-
-  if(value_row.is_false())
-  { // The current value is bottom - set to the model value
-    value_row=segment_item_model;
-    return true;
-  }
-  else if(value_row!=segment_item_model)
-  { // The model value is different from the current value - set current to top
-    value_row=true_exprt();
-    return true;
-  }
-
-  return improved;
-}
-
-void array_domaint::make_template(
+/// Create segmentation of all arrays used in var_specs.
+void array_domaint::make_segments(
   const var_specst &var_specs,
   const namespacet &ns)
 {
+  var_specst result_var_specs;
   for(const var_spect &spec : var_specs)
   {
     if(spec.guards.kind!=guardst::LOOP)
@@ -146,16 +82,16 @@ void array_domaint::make_template(
           // For each index i, add two segments:
           // {last} ... {i}
           if(last_border!=index_var)
-            add_segment_row(spec, last_border, index_var);
+            add_segment(spec, last_border, index_var);
           // {i} ... {i + 1}
           auto index_plus_one=simplify_expr(expr_plus_one(index_var), ns);
-          add_segment_row(spec, index_var, index_plus_one);
+          add_segment(spec, index_var, index_plus_one);
 
           last_border=index_plus_one;
         }
 
         // The last segment is {last} ... {size}
-        add_segment_row(spec, last_border, array_size);
+        add_segment(spec, last_border, array_size);
       }
       else
       { // Indices cannot be ordered - create one segmentation for each index
@@ -168,47 +104,29 @@ void array_domaint::make_template(
           exprt index_plus_one=expr_plus_one(index_var);
           // For each written index i, create a segmentation:
           //   {0} ... {i] ... {i + 1} ... {size}
-          add_segment_row(spec, make_zero(index_type), index_var);
-          add_segment_row(spec, index_var, index_plus_one);
-          add_segment_row(spec, index_plus_one, array_size);
+          add_segment(spec, make_zero(index_type), index_var);
+          add_segment(spec, index_var, index_plus_one);
+          add_segment(spec, index_plus_one, array_size);
         }
       }
     }
   }
 }
 
-/// Add a single segment row to the template.
-/// A unique index variable for the segment is created.
-void array_domaint::add_segment_row(
+/// Add a single segment to the template.
+/// New unique variables representing the segment index and element are created.
+void array_domaint::add_segment(
   const var_spect &var_spec,
   const exprt &lower,
   const exprt &upper)
 {
-  templ.push_back(template_rowt());
-  template_rowt &templ_row=templ.back();
-
   const symbol_exprt &index_var=symbol_exprt(
-    "idx#"+std::to_string(templ.size()), lower.type());
-  templ_row.expr=std::unique_ptr<template_row_exprt>(
-    new template_row_exprt(var_spec.var, index_var, lower, upper));
-
-  templ_row.guards=var_spec.guards;
-
-  segmentation_map[var_spec.var].push_back(
-    dynamic_cast<template_row_exprt *>(templ_row.expr.get()));
-}
-
-/// Retrieve model value of the array item that was used as a representative
-/// item for the current row segment.
-exprt array_domaint::get_current_item_model()
-{
-  auto &array_model=smt_model_values[0];
-  auto &index_model=smt_model_values[1];
-  // Convert binary string to integer
-  int index_value=stoi(
-    to_constant_expr(index_model).get_string(ID_value), nullptr, 2);
-  // Extract the concrete array element that was used to improve the row
-  return to_array_expr(array_model).operands()[index_value];
+    "idx#"+std::to_string(segment_cnt), lower.type());
+  const symbol_exprt &elem_var=symbol_exprt(
+    "elem#"+std::to_string(segment_cnt++),
+    to_array_type(var_spec.var.type()).subtype());
+  segmentation_map[var_spec.var].emplace_back(
+    var_spec, elem_var, index_var, lower, upper);
 }
 
 /// Projection of the computed invariant on variables.
@@ -220,29 +138,10 @@ void array_domaint::project_on_vars(
   const var_sett &vars,
   exprt &result)
 {
-  simple_domaint::project_on_vars(base_value, {}, result);
-  result = and_exprt(result, map_segments_to_read_indices());
-}
-
-/// Get row invariant (i.e. row pre-constraint) projected onto a given index
-/// expression.
-exprt array_domaint::project_row_on_index(
-  simple_domaint::rowt row,
-  const simple_domaint::valuet &value,
-  const exprt &index)
-{
-  auto row_expr=dynamic_cast<template_row_exprt &>(*templ[row].expr);
-  // Get row pre-constraint
-  exprt row_value=get_row_pre_constraint(row, value);
-  // Typecast index if needed
-  exprt index_expr=index;
-  if(index.type()!=row_expr.index_var.type())
-    index_expr=typecast_exprt(index, row_expr.index_var.type());
-  // Replace row index by the index to project on
-  replace_mapt repl_map;
-  repl_map[row_expr.index_var]=index_expr;
-  replace_expr(repl_map, row_value);
-  return row_value;
+  auto &array_value=dynamic_cast<array_valuet &>(base_value);
+  inner_domain->project_on_vars(*array_value.inner_value, {}, result);
+  result=and_exprt(result, segment_elem_equality());
+  result=and_exprt(result, map_segments_to_read_indices());
 }
 
 /// Try to find ordering among given index expressions.
@@ -295,44 +194,35 @@ bool array_domaint::ordered_indices(
   return res;
 }
 
-/// Pre-constraint needs to include a mapping of segment indices to read indices
-/// so that an already computed invariant for one loop can be applied and can
-/// help to compute an invariant of another loop.
-exprt array_domaint::to_pre_constraints(const simple_domaint::valuet &value)
-{
-  return and_exprt(
-    simple_domaint::to_pre_constraints(value), map_segments_to_read_indices());
-}
-
 /// Map symbolic indices of segments onto actually read indices.
 /// For each segment of an array and for each index read from that array:
 ///   (idx#read >= lower && idx#read < upper) => idx#read == idx#segment
 exprt array_domaint::map_segments_to_read_indices()
 {
   exprt::operandst result;
-  for (auto &array : segmentation_map)
+  for(auto &array : segmentation_map)
   {
     auto array_name=get_original_name(to_symbol_expr(array.first));
-    auto index_type=array.second.at(0)->index_var.type();
+    auto index_type=array.second.at(0).index_var.type();
     auto &read_indices=SSA.array_index_analysis.read_indices.at(array_name);
 
     exprt::operandst array_constraint;
-    for (auto &read_index_info : read_indices)
+    for(auto &read_index_info : read_indices)
     {
       exprt read_index=SSA.read_rhs(
         read_index_info.index, read_index_info.loc);
-      if (read_index.type() != index_type)
-        read_index = typecast_exprt(read_index, index_type);
+      if(read_index.type()!=index_type)
+        read_index=typecast_exprt(read_index, index_type);
 
       exprt::operandst index_constraint;
-      for (auto &segment : array.second)
+      for(auto &segment : array.second)
       {
         index_constraint.push_back(
           implies_exprt(
             and_exprt(
-              binary_relation_exprt(read_index, ID_ge, segment->lower_bound),
-              binary_relation_exprt(read_index, ID_lt, segment->upper_bound)),
-            equal_exprt(read_index, segment->index_var)));
+              binary_relation_exprt(read_index, ID_ge, segment.lower_bound),
+              binary_relation_exprt(read_index, ID_lt, segment.upper_bound)),
+            equal_exprt(read_index, segment.index_var)));
       }
       array_constraint.push_back(conjunction(index_constraint));
     }
@@ -341,13 +231,105 @@ exprt array_domaint::map_segments_to_read_indices()
   return conjunction(result);
 }
 
-void array_domaint::template_row_exprt::output(
+/// Get conjunction of equalities between segment symbolic variables and
+/// corresponding array elements.
+exprt array_domaint::segment_elem_equality()
+{
+  exprt::operandst result;
+  // For each segment, add equality:
+  //   elem#i = a[idx#i]
+  for(auto &array : segmentation_map)
+    for(auto &segment : array.second)
+      result.push_back(
+        equal_exprt(
+          segment.elem_var,
+          index_exprt(segment.array_spec.var, segment.index_var)));
+  return conjunction(result);
+}
+
+/// Create a new set of variable specifications that contains symbolic element
+/// variables of all array segments in the domain.
+var_specst array_domaint::var_specs_from_segments()
+{
+  var_specst var_specs;
+
+  for(auto &array_segments : segmentation_map)
+  {
+    for(auto &segment : array_segments.second)
+    {
+      var_spect v;
+      v.var=segment.elem_var;
+      v.guards=segment.array_spec.guards;
+      v.guards.pre_guard=and_exprt(
+        v.guards.pre_guard, segment.get_constraint());
+      v.guards.post_guard=and_exprt(
+        v.guards.post_guard, segment.get_constraint());
+      rename(v.guards.post_guard);
+
+      var_specs.push_back(v);
+    }
+  }
+
+  return var_specs;
+}
+
+void array_domaint::output_domain(std::ostream &out, const namespacet &ns) const
+{
+  inner_domain->output_domain(out, ns);
+}
+
+void array_domaint::output_value(
   std::ostream &out,
+  const domaint::valuet &value,
   const namespacet &ns) const
 {
-  out << from_expr(ns, "", index_var) << " in ["
-      << from_expr(ns, "", lower_bound) << ", "
-      << from_expr(ns, "", upper_bound) << "] ==> "
-      << from_expr(ns, "", index_exprt(array, index_var))
-      << " == CONST" << std::endl;
+  auto &array_value=dynamic_cast<const array_valuet &>(value);
+  inner_domain->output_value(out, *array_value.inner_value, ns);
+}
+
+void array_domaint::restrict_to_sympath(const symbolic_patht &sympath)
+{
+  inner_domain->restrict_to_sympath(sympath);
+}
+
+void
+array_domaint::eliminate_sympaths(const std::vector<symbolic_patht> &sympaths)
+{
+  inner_domain->eliminate_sympaths(sympaths);
+}
+
+void array_domaint::undo_sympath_restriction()
+{
+  inner_domain->undo_sympath_restriction();
+}
+
+void array_domaint::remove_all_sympath_restrictions()
+{
+  inner_domain->undo_sympath_restriction();
+}
+
+std::unique_ptr<strategy_solver_baset> array_domaint::new_strategy_solver(
+  incremental_solvert &solver_,
+  const local_SSAt &SSA_,
+  message_handlert &message_handler)
+{
+  auto inner_solver=inner_domain->new_strategy_solver(
+    solver_, SSA_, message_handler);
+  return std::unique_ptr<strategy_solver_baset>(
+    new strategy_solver_arrayt(
+      *this, std::move(inner_solver), solver_, SSA_, message_handler));
+}
+
+exprt array_domaint::array_segmentt::get_constraint()
+{
+  const exprt interval_expr=and_exprt(
+    binary_relation_exprt(index_var, ID_ge, lower_bound),
+    binary_relation_exprt(index_var, ID_lt, upper_bound));
+  const exprt bounds_expr=and_exprt(
+    binary_relation_exprt(index_var, ID_ge, make_zero(index_var.type())),
+    binary_relation_exprt(
+      index_var, ID_lt, to_array_type(array_spec.var.type()).size()));
+  const exprt elem_expr=equal_exprt(
+    elem_var, index_exprt(array_spec.var, index_var));
+  return conjunction(exprt::operandst({bounds_expr, interval_expr, elem_expr}));
 }

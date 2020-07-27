@@ -27,8 +27,8 @@ class template_generator_baset:public messaget
 public:
   explicit template_generator_baset(
     optionst &_options,
-    ssa_dbt &_ssa_db,
-    ssa_local_unwindert &_ssa_local_unwinder,
+    const ssa_dbt &_ssa_db,
+    const ssa_local_unwindert &_ssa_local_unwinder,
     incremental_solvert *solver=nullptr):
     options(_options), ssa_db(_ssa_db),
     ssa_local_unwinder(_ssa_local_unwinder),
@@ -36,6 +36,13 @@ public:
   {
     std_invariants=options.get_bool_option("std-invariants");
   }
+
+  template_generator_baset(template_generator_baset &other):
+    template_generator_baset(
+      other.options,
+      other.ssa_db,
+      other.ssa_local_unwinder,
+      other.solver) {}
 
   virtual void operator()(
     unsigned _domain_number,
@@ -150,6 +157,8 @@ protected:
   {
     expr.set_identifier(id2string(expr.get_identifier())+"'");
   }
+
+  friend class array_domaint;
 };
 
 #endif // CROVER_2LS_DOMAINS_TEMPLATE_GENERATOR_BASE_H
