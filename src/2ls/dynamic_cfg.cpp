@@ -189,7 +189,7 @@ void dynamic_cfgt::build_from_invariant(
     if(guard.id()==ID_and)
       guard=guard.op0();
     else
-      assert(false);
+      return;
   }
   ssa.get_full_ssa_name(to_symbol_expr(guard), id.pc, id.iteration_stack);
 
