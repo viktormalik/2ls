@@ -303,6 +303,9 @@ public:
     const var_specst &var_specs,
     const namespacet &ns);
 
+  virtual std::vector<std::string>
+    identify_invariant_imprecision(const valuet &value) { return {}; }
+
 protected:
   unsigned domain_number; // serves as id for variables names
   replace_mapt &renaming_map;

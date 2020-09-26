@@ -151,6 +151,17 @@ public:
 
   void rename_for_row(exprt &expr, const rowt &row);
 
+  virtual std::vector<std::string>
+    identify_invariant_imprecision(const valuet &value) override;
+
+  bool is_row_value_max(
+    const rowt &row,
+    const row_valuet &row_val);
+
+  bool is_row_value_min(
+    const rowt &row,
+    const row_valuet &row_val);
+
 protected:
   friend class strategy_solver_binsearcht;
   friend class strategy_solvert;

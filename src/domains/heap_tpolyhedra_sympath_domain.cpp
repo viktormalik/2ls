@@ -84,3 +84,32 @@ void heap_tpolyhedra_sympath_domaint::set_smt_values(
   size_t row)
 {
 }
+
+/// Identify imprecise template variables inside invariant
+/// \return Vector of imprecise SSA variable names
+std::vector<std::string>
+  heap_tpolyhedra_sympath_domaint::identify_invariant_imprecision(
+  const domaint::valuet &value)
+{
+  const heap_tpolyhedra_sympath_valuet &v=
+    static_cast<const heap_tpolyhedra_sympath_valuet &>(value);
+
+  // Imprecise SSA variable names
+  std::vector<std::string> ssa_vars;
+
+  for(auto &config : v)
+  {
+    std::vector<std::string> ids=
+      heap_tpolyhedra_domain.identify_invariant_imprecision(config.second);
+
+    // Concatenate with previously found names
+    ssa_vars.reserve(ssa_vars.size()+ids.size());
+    ssa_vars.insert(
+      ssa_vars.end(),
+      std::make_move_iterator(ids.begin()),
+      std::make_move_iterator(ids.end()));
+  }
+
+  return ssa_vars;
+}
+

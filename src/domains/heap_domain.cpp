@@ -1473,3 +1473,34 @@ const exprt heap_domaint::get_points_to_dest(
   else
     return nil_exprt();
 }
+
+/// Identify imprecise template variables of invariant
+/// \param value: Computed invariant
+/// \return Vector of imprecise SSA variable names
+std::vector<std::string> heap_domaint::identify_invariant_imprecision(
+  const domaint::valuet &value)
+{
+  // Get the corresponding template row values
+  const heap_valuet &val=static_cast<const heap_valuet &>(value);
+  assert(val.size()==templ.size());
+
+  // Vector of ssa variable names
+  std::vector<std::string> ssa_vars;
+
+  for(rowt row=0; row<templ.size(); ++row)
+  {
+    const exprt &row_expr=templ[row].expr;
+    const exprt &row_val=val[row].get_row_expr(row_expr, false);
+
+    // Row value is nondeterministic
+    if(row_val.is_true())
+    {
+      // skip any CPROVER symobls
+      if(row_expr.id()==ID_symbol && !is_cprover_symbol(row_expr))
+        ssa_vars.push_back(from_expr(domaint::ns, "", row_expr));
+    }
+  }
+
+  return ssa_vars;
+}
+

@@ -580,3 +580,45 @@ int get_dynobj_instance(const irep_idt &id)
   std::string number=name.substr(start, end-start);
   return std::stoi(number);
 }
+
+/// \return If the name has a dynamic object's prefix
+bool is_dynamic_name(const std::string &name)
+{
+  return has_prefix(name, "dynamic_object$");
+}
+
+/// retrieve original variable name from ssa variable name
+std::string get_original_name(const std::string &s)
+{
+  size_t pos1=s.find_last_of("#");
+  if(pos1==std::string::npos || (s.substr(pos1+1, 12)=="return_value"))
+    return s;
+  return s.substr(0, pos1);
+}
+
+/// \return Any number > 0 if loopback else std::string::npos
+int is_loopback_var(const std::string &name)
+{
+  return name.rfind("#lb");
+}
+
+/// Extract the member field from the dynamic object name.
+/// \param name: SSA dynamic object name.
+/// \return Structure field name of the dynamic object.
+std::string get_dynamic_field(const std::string &name)
+{
+  std::string not_found("<NO MEMBER>");
+
+  // extract the '_FIELD_' in "dynamic_object$i#k._FIELD_#"
+  size_t dot_pos=name.find('.', DYN_PREFIX_LEN);
+  if(dot_pos==std::string::npos)
+    return not_found;
+
+  size_t hash_pos=name.find('#', dot_pos+1);
+  if(hash_pos==std::string::npos)
+    return not_found;
+
+  std::string field_str=name.substr(dot_pos+1, hash_pos-dot_pos-1);
+  return !field_str.empty() ? field_str : not_found;
+}
+

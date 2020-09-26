@@ -61,7 +61,7 @@ class optionst;
   "(preconditions)(sufficient)" \
   "(show-locs)(show-vcc)(show-properties)(trace)(show-stats)" \
   "(show-goto-functions)(show-guards)(show-defs)(show-ssa)(show-assignments)" \
-  "(show-invariants)(std-invariants)" \
+  "(show-invariants)(std-invariants)(show-imprecise-vars)" \
   "(property):(all-properties)(k-induction)(incremental-bmc)" \
   "(no-spurious-check)(all-functions)" \
   "(no-simplify)(no-fixed-point)" \

@@ -265,6 +265,9 @@ public:
     return templ.empty();
   }
 
+  virtual std::vector<std::string>
+    identify_invariant_imprecision(const valuet &value) override;
+
 protected:
   templatet templ;
 

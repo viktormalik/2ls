@@ -20,6 +20,7 @@ Author: Peter Schrammel
 #include <util/simplify_expr.h>
 #include <util/mp_arith.h>
 #include <util/options.h>
+#include <util/cprover_prefix.h>
 
 #include "strategy_solver_base.h"
 #include "strategy_solver_binsearch.h"
@@ -46,6 +47,7 @@ Author: Peter Schrammel
 #define BINSEARCH_SOLVER strategy_solver_binsearch3t(\
   *static_cast<tpolyhedra_domaint *>(domain), solver, SSA, SSA.ns)
 #endif
+
 
 void ssa_analyzert::operator()(
   incremental_solvert &solver,
@@ -192,6 +194,17 @@ void ssa_analyzert::operator()(
   solver_calls+=s_solver->get_number_of_solver_calls();
   solver_instances+=s_solver->get_number_of_solver_instances();
 
+  // imprecision identification
+  if(template_generator.options.get_bool_option("show-imprecise-vars"))
+  {
+    // get imprecise SSA variable names
+    std::vector<std::string> ssa_vars=
+      domain->identify_invariant_imprecision(*result);
+
+    // link the variables to the exact goto instuctions
+    find_goto_instrs(SSA, ssa_vars);
+  }
+
   delete s_solver;
 }
 
@@ -212,3 +225,95 @@ const exprt ssa_analyzert::input_heap_bindings()
 {
   return static_cast<heap_domaint &>(*domain).get_iterator_bindings();
 }
+
+/// Save the source code information about the variables into
+///   the summary of imprecise variables
+/// \param SSA: Local SSA
+/// \param ssa_vars: Vector of imprecise SSA loop back variable names
+void ssa_analyzert::find_goto_instrs(
+  local_SSAt &SSA,
+  const std::vector<std::string> &ssa_vars)
+{
+  imprecise_vars_summary.resize(ssa_vars.size());
+  imprecise_varst::iterator summary_it=imprecise_vars_summary.begin();
+
+  for(auto &var : ssa_vars)
+  {
+    bool is_dynamic=false;
+
+    // save the real name of variables into the summary
+    if(is_dynamic_name(var))
+    {
+      summary_it->pretty_name=get_dynobj_name(var);
+      is_dynamic=true;
+    }
+    else
+      summary_it->pretty_name=get_original_name(var);
+
+    int node_loc=get_name_node_loc(var);
+
+    // Node location of loop back variables is known
+    if(node_loc!=-1)
+    {
+      // get the actual loop back node in the local SSA
+      local_SSAt::nodest::iterator lb_node=SSA.find_node(
+        SSA.get_location(static_cast<unsigned>(node_loc)));
+
+      // save the source location of the loop head node in the summary
+      local_SSAt::nodest::iterator lh_node=lb_node->loophead;
+      summary_it->loophead_line=lh_node->location->source_location.get_line();
+
+      // for dynamic objects additionally we save:
+      //  allocation site location
+      //  if structured-typed then its structure field
+      if(is_dynamic)
+      {
+        int node_line=get_dynobj_line(var);
+
+        summary_it->dyn_alloc_line=node_line==-1
+          ? "<UNKNOWN>"
+          : (SSA.find_node(SSA.get_location(static_cast<unsigned>(node_line))))
+              ->location->source_location.get_line();
+
+        summary_it->dyn_mem_field=get_dynamic_field(var);
+      }
+    }
+
+    summary_it++;
+  }
+}
+
+/// Get only the dynamic object name: "dynamic_object$i#y"
+/// \param name: SSA loop-back Dynamic object name
+/// \return SSA dynamic object name without its field and anything after
+std::string ssa_analyzert::get_dynobj_name(const std::string &name)
+{
+  size_t idx;
+
+  // is structure-typed object ->
+  //  get the part right before the object field
+  if((idx=name.find('.', DYN_PREFIX_LEN))!=std::string::npos)
+    return name.substr(0, idx);
+  // remove everything after loop back part of the string
+  else if((idx=is_loopback_var(name))!=std::string::npos)
+    return name.substr(0, idx);
+  else
+    return name;
+}
+
+/// Extract the node location from its ssa name.
+/// \param name: SSA loop back variable name.
+/// \return Location of the node in the local SSA.
+int ssa_analyzert::get_name_node_loc(const std::string &name)
+{
+  // is not a loop back variable -> has unknown location
+  size_t idx=is_loopback_var(name);
+  if(idx==std::string::npos)
+    return -1;
+
+  // get the location number after '#lb'
+  std::string loc_str=name.substr(idx+3);
+  assert(!loc_str.empty());
+  return std::stoi(loc_str);
+}
+
