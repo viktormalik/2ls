@@ -21,6 +21,7 @@ Author: Peter Schrammel
 #include <util/replace_expr.h>
 #include <util/namespace.h>
 #include <solvers/refinement/bv_refinement.h>
+#include <goto-programs/goto_program.h>
 #include <memory>
 #include "symbolic_path.h"
 #include "incremental_solver.h"
@@ -30,6 +31,8 @@ class template_generator_baset;
 class strategy_solver_baset;
 
 class local_SSAt;
+
+typedef goto_programt::const_targett locationt;
 
 /// Guards specification
 struct guardst
@@ -61,6 +64,7 @@ struct var_spect
   vart var;
   guardst guards;
   var_listt related_vars;
+  locationt loc;
 
   void output(std::ostream &out, const namespacet &ns) const;
 };
