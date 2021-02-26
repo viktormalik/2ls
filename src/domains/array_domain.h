@@ -86,7 +86,7 @@ public:
     exprt &result) override;
 
   exprt segment_elem_equality();
-  exprt map_segments_to_read_indices();
+  exprt map_value_to_read_indices(const array_valuet &value);
 
   void output_domain(std::ostream &out, const namespacet &ns) const override;
   void output_value(
