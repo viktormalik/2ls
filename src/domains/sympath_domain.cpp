@@ -44,7 +44,8 @@ void sympath_domaint::output_domain(
 void sympath_domaint::project_on_vars(
   domaint::valuet &value,
   const var_sett &vars,
-  exprt &result)
+  exprt &result,
+  bool ignore_top)
 {
   auto &v=dynamic_cast<sympath_valuet &>(value);
   exprt::operandst c;
@@ -52,7 +53,7 @@ void sympath_domaint::project_on_vars(
   {
     exprt config_result;
     inner_domain->project_on_vars(
-      *config.second, vars, config_result);
+      *config.second, vars, config_result, ignore_top);
     c.push_back(and_exprt(config.first, config_result));
   }
   c.push_back(no_loops_path);

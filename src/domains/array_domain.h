@@ -83,7 +83,8 @@ public:
   void project_on_vars(
     domaint::valuet &base_value,
     const var_sett &vars,
-    exprt &result) override;
+    exprt &result,
+    bool ignore_top) override;
 
   exprt segment_elem_equality();
   exprt map_value_to_read_indices(const array_valuet &value);

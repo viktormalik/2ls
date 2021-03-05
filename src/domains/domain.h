@@ -159,7 +159,8 @@ public:
   virtual void project_on_vars(
     valuet &value,
     const var_sett &vars,
-    exprt &result)=0;
+    exprt &result,
+    bool ignore_top=false)=0;
 
   // Methods related to symbolic paths
 

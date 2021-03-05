@@ -70,7 +70,8 @@ public:
   void project_on_vars(
     domaint::valuet &value,
     const var_sett &vars,
-    exprt &result) override;
+    exprt &result,
+    bool ignore_top) override;
 
   void restrict_to_sympath(const symbolic_patht &sympath) override;
   void eliminate_sympaths(const std::vector<symbolic_patht> &sympaths) override;
