@@ -143,16 +143,19 @@ void array_domaint::project_on_vars(
 /// otherwise returns false.
 bool array_domaint::order_indices(var_listt &indices, const exprt &array_size)
 {
-  for(unsigned i=0; i<indices.size()-1; ++i)
+  for(unsigned end=indices.size(); end>0; --end)
   {
-    if(ordered_indices(indices[i+1], indices[i], array_size))
+    for(unsigned i=0; i<end-1; ++i)
     {
-      const exprt temp=indices[i];
-      indices[i]=indices[i+1];
-      indices[i+1]=temp;
+      if(ordered_indices(indices[i+1], indices[i], array_size))
+      {
+        const exprt temp=indices[i];
+        indices[i]=indices[i+1];
+        indices[i+1]=temp;
+      }
+      else if(!ordered_indices(indices[i], indices[i+1], array_size))
+        return false;
     }
-    else if(!ordered_indices(indices[i], indices[i+1], array_size))
-      return false;
   }
   return true;
 }
