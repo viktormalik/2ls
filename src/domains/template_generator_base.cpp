@@ -101,6 +101,7 @@ void template_generator_baset::get_init_expr(
   symbol_exprt pre_var=SSA.name(*o_it, local_SSAt::LOOP_BACK, n_it->location);
   ssa_local_unwinder.unwinder_rename(pre_var, *n_it, true);
   init_renaming_map[pre_var]=init_expr;
+  post_renaming_map[init_expr]=phi_var;
 }
 
 void template_generator_baset::collect_variables_loop(
@@ -603,7 +604,13 @@ std::unique_ptr<domaint> template_generator_baset::instantiate_standard_domains(
     if(!array_var_specs.empty())
       domains.emplace_back(
         new array_domaint(
-          domain_number++, renaming_map, array_var_specs, SSA, solver, *this));
+          domain_number++,
+          renaming_map,
+          init_renaming_map,
+          array_var_specs,
+          SSA,
+          solver,
+          *this));
   }
   if(options.get_bool_option("intervals"))
   {
