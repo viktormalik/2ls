@@ -1156,6 +1156,9 @@ bool twols_parse_optionst::process_goto_program(
     dynamic_memory_detected=replace_malloc(
       goto_model, "", options.get_bool_option("pointer-check"));
 
+    if (dynamic_memory_detected && options.get_bool_option("arrays"))
+      assert(false);
+
     // Allow recording of mallocs and memory leaks
     if(options.get_bool_option("pointer-check"))
     {
