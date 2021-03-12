@@ -155,8 +155,8 @@ void array_domaint::project_on_vars(
 
 /// Try to find ordering among given index expressions.
 /// The ordering is searched for post variants of the variables.
-/// If a unique ordering can be found, orders indices in-situ and returns true,
-/// otherwise returns false.
+/// If a unique ordering can be found, orders indices in-situ, removes
+/// duplicates, and returns true. Otherwise returns false.
 bool array_domaint::order_indices(var_listt &indices, const exprt &array_size)
 {
   solver->new_context();
@@ -178,8 +178,31 @@ bool array_domaint::order_indices(var_listt &indices, const exprt &array_size)
       }
     }
   }
+  unique_indices(indices, array_size);
   solver->pop_context();
   return true;
+}
+
+/// Remove duplicate indices and indices equal to 0.
+/// Assumes that the indices are ordered.
+void array_domaint::unique_indices(var_listt &indices, const exprt &array_size)
+{
+  for(auto it=indices.begin(), next=std::next(it);
+      next!=indices.end();
+      next=std::next(it))
+  {
+    if(equal_indices(*it, make_zero(it->type()), array_size))
+      it=indices.erase(it);
+    else if(equal_indices(*it, *next, array_size))
+    {
+      if(it->is_constant())
+        it=indices.erase(it);
+      else
+        indices.erase(next);
+    }
+    else
+      it++;
+  }
 }
 
 /// Check if there exists an ordering relation <= between two index expressions.
@@ -216,6 +239,35 @@ bool array_domaint::ordered_indices(
   bool res=false;
   if((*solver)()==decision_proceduret::D_UNSATISFIABLE)
     res=true;
+  solver->pop_context();
+  return res;
+}
+
+/// Check if the two index expressions are always equal.
+/// Queries SMT solver for negation of the formula:
+///   (i1 >= 0 && i1 < size && i2 >= 0 && i2 < size) => i1 == i2
+///
+/// If the negation is unsatisfiable, then the formula always holds and the
+/// indices are equal.
+bool array_domaint::equal_indices(
+  const exprt &first,
+  const exprt &second,
+  const exprt &array_size)
+{
+  exprt::operandst bounds=
+    {
+      binary_relation_exprt(first, ID_ge, from_integer(0, first.type())),
+      binary_relation_exprt(first, ID_lt, array_size),
+      binary_relation_exprt(second, ID_ge, from_integer(0, second.type())),
+      binary_relation_exprt(second, ID_lt, array_size),
+    };
+  const exprt ordering_expr=implies_exprt(
+    conjunction(bounds),
+    equal_exprt(first, second));
+
+  solver->new_context();
+  *solver << not_exprt(ordering_expr);
+  bool res=(*solver)()==decision_proceduret::D_UNSATISFIABLE;
   solver->pop_context();
   return res;
 }

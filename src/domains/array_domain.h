@@ -113,7 +113,12 @@ protected:
     const exprt &upper);
   var_specst var_specs_from_segments();
   bool order_indices(var_listt &indices, const exprt &array_size);
+  void unique_indices(var_listt &indices, const exprt &array_size);
   bool ordered_indices(
+    const exprt &first,
+    const exprt &second,
+    const exprt &array_size);
+  bool equal_indices(
     const exprt &first,
     const exprt &second,
     const exprt &array_size);
