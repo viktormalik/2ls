@@ -124,6 +124,7 @@ protected:
     const exprt &array_size);
 
   void extend_indices_by_loop_inits(var_listt &indices);
+  void clear_loop_inits_renaming();
 
   exprt get_array_size(const var_spect &array_spec);
 

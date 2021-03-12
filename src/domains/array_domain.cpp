@@ -64,6 +64,7 @@ void array_domaint::make_segments(
 
       auto written_indices=spec.related_vars;
       extend_indices_by_loop_inits(written_indices);
+
       if(order_indices(written_indices, array_size))
       { // Indices can be ordered - create a single segmentation
         // The first index border is {0}
@@ -117,6 +118,11 @@ void array_domaint::make_segments(
           add_segment(spec, index_plus_one, array_size);
         }
       }
+
+      // renaming_map contains mappings for pre-loop indices:
+      //     idx#pre -> idx#phi
+      // we used them to determine index ordering but now we have to remove them
+      clear_loop_inits_renaming();
     }
   }
 }
@@ -489,12 +495,20 @@ void array_domaint::extend_indices_by_loop_inits(var_listt &indices)
   var_listt new_indices;
   for (auto &index : indices)
   {
-    auto init_expr = init_renaming_map.find(index);
-    if (init_expr != init_renaming_map.end())
+    exprt new_index = index;
+    replace_expr(init_renaming_map, new_index);
+    if (new_index != index)
     {
-      new_indices.push_back(init_expr->second);
-      loop_init_segment_borders.insert(init_expr->second);
+      new_indices.push_back(new_index);
+      loop_init_segment_borders.insert(new_index);
     }
   }
   indices.insert(indices.end(), new_indices.begin(), new_indices.end());
+}
+
+/// Remove all renamings of pre-loop segment borders from renaming_map
+void array_domaint::clear_loop_inits_renaming()
+{
+  for (auto &init_index : loop_init_segment_borders)
+    renaming_map.erase(init_index);
 }

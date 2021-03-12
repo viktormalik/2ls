@@ -101,7 +101,8 @@ void template_generator_baset::get_init_expr(
   symbol_exprt pre_var=SSA.name(*o_it, local_SSAt::LOOP_BACK, n_it->location);
   ssa_local_unwinder.unwinder_rename(pre_var, *n_it, true);
   init_renaming_map[pre_var]=init_expr;
-  post_renaming_map[init_expr]=phi_var;
+  if (options.get_bool_option("arrays"))
+    post_renaming_map[init_expr]=phi_var;
 }
 
 void template_generator_baset::collect_variables_loop(
