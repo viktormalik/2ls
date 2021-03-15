@@ -15,6 +15,7 @@ Author: Viktor Malik <viktor.malik@gmail.com>
 #include <util/arith_tools.h>
 #include <ssa/local_ssa.h>
 #include <util/simplify_expr.h>
+#include <ssa/expression_dependence.h>
 
 unsigned array_domaint::segment_cnt=0;
 
