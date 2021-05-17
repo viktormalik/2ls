@@ -46,4 +46,6 @@ bool is_cprover_symbol(const exprt &expr);
 int get_dynobj_line(const irep_idt &id);
 std::string get_dynobj_instance(const irep_idt &id);
 
+bool same_var(const exprt &expr1, const exprt &expr2);
+
 #endif
