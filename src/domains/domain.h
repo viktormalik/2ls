@@ -29,6 +29,7 @@ Author: Peter Schrammel
 // Forward declaration - real is in template_generator_base.h
 class template_generator_baset;
 class strategy_solver_baset;
+class tpolyhedra_domaint;
 
 class local_SSAt;
 
@@ -173,6 +174,8 @@ public:
   virtual void undo_sympath_restriction()=0;
   /// Remove all symbolic path restrictions.
   virtual void remove_all_sympath_restrictions()=0;
+
+  virtual tpolyhedra_domaint *get_tpolyhedra_domain() { return nullptr; }
 
 protected:
   unsigned domain_number; // serves as id for variables names

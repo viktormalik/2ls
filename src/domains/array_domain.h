@@ -105,6 +105,11 @@ public:
     const local_SSAt &SSA,
     message_handlert &message_handler) override;
 
+  tpolyhedra_domaint *get_tpolyhedra_domain() override
+  {
+    return inner_domain->get_tpolyhedra_domain();
+  }
+
 protected:
   void make_segments(const var_specst &var_specs, const namespacet &ns);
   void add_segment(
