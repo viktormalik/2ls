@@ -11,6 +11,7 @@ Author: Viktor Malik <viktor.malik@gmail.com>
 #include "array_domain.h"
 #include "tpolyhedra_domain.h"
 #include "strategy_solver_array.h"
+#include "product_domain.h"
 #include <algorithm>
 #include <util/arith_tools.h>
 #include <ssa/local_ssa.h>
@@ -38,6 +39,19 @@ array_domaint::array_domaint(
   auto segment_var_specs=var_specs_from_segments();
   inner_domain=
     template_generator.instantiate_standard_domains(segment_var_specs, SSA);
+
+  // For the zones domain, add some custom template rows for differences among
+  // segments and scalars
+  if(template_generator.options.get_bool_option("zones"))
+  {
+    if(auto *tpolyhedra_domain=inner_domain->get_tpolyhedra_domain())
+    {
+      auto value_var_specs=template_generator_baset::filter_template_domain(
+        template_generator.all_var_specs);
+      add_array_difference_template(
+        tpolyhedra_domain, segment_var_specs, value_var_specs);
+    }
+  }
 }
 
 /// Value initialization - initialize inner domains
@@ -457,6 +471,72 @@ std::unique_ptr<strategy_solver_baset> array_domaint::new_strategy_solver(
   return std::unique_ptr<strategy_solver_baset>(
     new strategy_solver_arrayt(
       *this, std::move(inner_solver), solver_, SSA_, message_handler));
+}
+
+/// Add difference template specific to array segments. Extends an existing
+/// template polyhedra domain.
+/// Currently adds the following differences:
+///   - difference between an array segment and a scalar variable
+///     (both if the scalar is updated within the same loop and if it isn't)
+/// \param domain Pointer to the existing template polyhedra domain
+/// \param segment_var_specs Array segment specs
+/// \param value_var_specs Scalar value specs
+void array_domaint::add_array_difference_template(
+  tpolyhedra_domaint *domain,
+  const var_specst &segment_var_specs,
+  const var_specst &value_var_specs)
+{
+  auto expr_dep=expression_dependencet(SSA.goto_function, SSA.ns);
+
+  // For each segment spec, find its dependencies and add:
+  //  - difference between the segment element and scalar dependencies
+  for(auto &segment_spec : segment_var_specs)
+  {
+    auto segment=elem_to_segment_map[segment_spec.var];
+    auto segment_var=get_original_expr(segment->array_spec.var);
+
+    // Iterate all dependencies of the array
+    auto &segment_deps=expr_dep.get_deps_for_ssa_expr(
+      segment->array_spec.var, SSA);
+    for (auto &dep : segment_deps.dep_sets)
+    {
+      if (dep.type() != segment->elem_var.type())
+        continue;
+      if(!segment_deps.dep_sets.same_set(segment_var, dep) || segment_var==dep)
+        continue;
+
+      // Scalar value dependence
+      if (dep.id() == ID_symbol)
+      {
+        // Read dependence as rhs
+        guardst guards=segment_spec.guards;
+        exprt dep_expr=SSA.read_rhs(dep, segment_spec.loc);
+
+        // Check if dependence is updated in the same loop
+        // If so, use loop-back instead of rhs
+        for(auto &value_spec : value_var_specs)
+        {
+          if(segment_spec.loc==value_spec.loc &&
+             get_original_expr(value_spec.var)==dep)
+          {
+            dep_expr=value_spec.var;
+            guards=guardst::merge_and_guards(guards, value_spec.guards, SSA.ns);
+            break;
+          }
+        }
+
+        // No valid SSA symbol has been found for dep
+        // (happens, e.g., when dep is local to the loop)
+        if (dep_expr == dep)
+          continue;
+
+        domain->add_template_row(
+          minus_exprt(segment_spec.var, dep_expr), guards);
+        domain->add_template_row(
+          minus_exprt(dep_expr, segment_spec.var), guards);
+      }
+    }
+  }
 }
 
 /// Get expression for size of an array

@@ -134,6 +134,11 @@ protected:
   void extend_indices_by_loop_inits(var_listt &indices);
   void clear_loop_inits_renaming();
 
+  void add_array_difference_template(
+    tpolyhedra_domaint *domain,
+    const var_specst &segment_var_specs,
+    const var_specst &value_var_specs);
+
   exprt get_array_size(const var_spect &array_spec);
 
   const local_SSAt &SSA;
