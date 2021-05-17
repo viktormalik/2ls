@@ -144,7 +144,8 @@ void array_domaint::make_segments(
 
 /// Add a single segment to the template.
 /// New unique variables representing the segment index and element are created.
-void array_domaint::add_segment(
+/// Returns pointer to the segment
+array_domaint::array_segmentt *array_domaint::add_segment(
   const var_spect &var_spec,
   const exprt &lower,
   const exprt &upper)
@@ -161,6 +162,7 @@ void array_domaint::add_segment(
   array_segmentt *new_seg=&segments.back();
   elem_to_segment_map[elem_var]=new_seg;
   array_segments[var_spec.var].push_back(new_seg);
+  return new_seg;
 }
 
 /// Projection of the computed invariant on variables.
@@ -396,10 +398,12 @@ exprt array_domaint::map_value_to_read_indices(const array_valuet &value)
 exprt array_domaint::segment_elem_equality()
 {
   exprt::operandst result;
-  // For each segment, add equality:
+  // For all segments and other array elements, add equality:
   //   elem#i = a[idx#i]
   for(const auto &segment : segments)
     result.push_back(segment.elem_bound());
+  for(const auto &elem : array_elems)
+    result.push_back(elem.elem_bound());
   return conjunction(result);
 }
 
@@ -551,6 +555,108 @@ void array_domaint::add_array_difference_template(
       }
     }
   }
+
+  // For each scalar value spec, add:
+  // - difference between the scalar and all of its dependent array accesses
+  //   (except for accesses where the array is updated within the same loop as
+  //   those are handled above)
+  for (auto &value_spec : value_var_specs)
+  {
+    auto scalar_var=get_original_expr(value_spec.var);
+
+    // Iterate all array access dependencies (index exprts) of the scalar
+    auto &scalar_deps=expr_dep.get_deps_for_ssa_expr(value_spec.var, SSA);
+    for (auto &dep : scalar_deps.dep_sets)
+    {
+      if (!(dep.id() == ID_index && dep.type() == value_spec.var.type()))
+        continue;
+      if (!scalar_deps.dep_sets.same_set(scalar_var, dep) || scalar_var==dep)
+        continue;
+
+      // Extract the array and the index from the array access
+      auto dep_array=to_index_expr(dep).array();
+      auto dep_index=to_index_expr(dep).index();
+      auto index_type=dep_index.type();
+      if (dep_index.id() == ID_typecast)
+        dep_index=to_typecast_expr(dep_index).op();
+
+      // Check if the dependent array is updated in the same loop
+      // If so, skip it as the difference was already created above
+      auto dep_array_lb=SSA.name(
+        ssa_objectt(dep_array, ns), local_SSAt::LOOP_BACK, value_spec.loc);
+      if(array_segments.find(dep_array_lb)!=array_segments.end())
+        continue;
+
+      // Check if the array access index is updated within the same loop
+      // If so, create new segmentation of the array:
+      //   {0} .. {i#lb} .. {i#lb - 1} .. {size}
+      // and add differences between the scalar and each of the segments
+      bool dep_has_spec=false;
+      for (auto &other_spec : value_var_specs)
+      {
+        if(other_spec.loc==value_spec.loc &&
+           get_original_expr(other_spec.var)==dep_index)
+        {
+          dep_has_spec=true;
+
+          // Create new spec with array rhs
+          var_spect new_var_spec;
+          new_var_spec.var=SSA.read_rhs(dep_array, value_spec.loc);
+          new_var_spec.guards=other_spec.guards;
+          new_var_spec.loc=other_spec.loc;
+
+          // Use index loop-back
+          exprt index_var = other_spec.var;
+          if (index_var.type() != index_type)
+            index_var=typecast_exprt(index_var, index_type);
+
+          // Create new segments for the array RHS:
+          //   {0} .. {i#lb} .. {i#lb + 1} .. {size}
+          std::vector<array_segmentt *> new_segments;
+          auto plus_one=expr_plus_one(index_var);
+          new_segments.push_back(
+            add_segment(new_var_spec, make_zero(index_type), index_var));
+          new_segments.push_back(
+            add_segment(new_var_spec, index_var, plus_one));
+          new_segments.push_back(
+            add_segment(new_var_spec, plus_one, get_array_size(new_var_spec)));
+
+          // For each segment, add difference between its element and the scalar
+          for (auto *s : new_segments)
+          {
+            guardst guards=new_var_spec.guards;
+            guards.pre_guard=and_exprt(
+              new_var_spec.guards.pre_guard, s->get_constraint());
+            guards.post_guard=and_exprt(
+              new_var_spec.guards.post_guard, s->get_constraint());
+            rename(new_var_spec.guards.post_guard);
+
+            guards=guardst::merge_and_guards(guards,value_spec.guards, SSA.ns);
+            domain->add_template_row(
+              minus_exprt(value_spec.var, s->elem_var), guards);
+            domain->add_template_row(
+              minus_exprt(s->elem_var, value_spec.var), guards);
+          }
+        }
+      }
+      if (dep_has_spec)
+        continue;
+
+      // Neither array nor index is updated in the same loop
+      //  => use rhs for both
+      add_array_elem(to_index_expr(SSA.read_rhs(dep, value_spec.loc)));
+      auto &new_elem=array_elems.back();
+
+      guardst guards=value_spec.guards;
+      guards.pre_guard=and_exprt(guards.pre_guard, new_elem.elem_bound());
+      guards.post_guard=and_exprt(guards.post_guard, new_elem.elem_bound());
+
+      domain->add_template_row(
+        minus_exprt(value_spec.var, new_elem.elem_var), guards);
+      domain->add_template_row(
+        minus_exprt(new_elem.elem_var, value_spec.var), guards);
+    }
+  }
 }
 
 /// Get expression for size of an array
@@ -608,4 +714,18 @@ void array_domaint::clear_loop_inits_renaming()
 {
   for (auto &init_index : loop_init_segment_borders)
     renaming_map.erase(init_index);
+}
+
+void array_domaint::add_array_elem(const index_exprt &elem)
+{
+  const symbol_exprt &elem_var=symbol_exprt(
+    "elem#rhs#"+std::to_string(array_elems.size()),
+    elem.type());
+
+  array_elems.emplace_back(elem.array(), elem.index(), elem_var);
+}
+
+exprt array_domaint::array_elemt::elem_bound() const
+{
+  return equal_exprt(elem_var, index_exprt(array, index));
 }

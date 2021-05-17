@@ -60,6 +60,22 @@ public:
   // elements are stable and we can use various maps to access them (see below).
   std::list<array_segmentt> segments;
 
+  // Additional abstractions for array elements.
+  // These are used when we need an array element (beside the segments) inside
+  // the template, but we cannot use the index_exprt directly.
+  struct array_elemt
+  {
+    vart array;
+    vart index;
+    vart elem_var;
+
+    array_elemt(const vart &array, const vart &index, const vart &elemVar):
+      array(array), index(index), elem_var(elemVar) {}
+
+    exprt elem_bound() const;
+  };
+  std::vector<array_elemt> array_elems;
+
   // Abstract domain for array elements
   std::unique_ptr<domaint> inner_domain;
 
@@ -115,11 +131,14 @@ public:
 
 protected:
   void make_segments(const var_specst &var_specs, const namespacet &ns);
-  void add_segment(
+  array_segmentt *add_segment(
     const var_spect &var_spec,
     const exprt &lower,
     const exprt &upper);
   var_specst var_specs_from_segments();
+
+  void add_array_elem(const index_exprt &elem);
+
   bool order_indices(var_listt &indices, const exprt &array_size);
   void unique_indices(var_listt &indices, const exprt &array_size);
   bool ordered_indices(
